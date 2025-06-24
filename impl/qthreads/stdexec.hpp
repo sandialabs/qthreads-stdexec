@@ -431,33 +431,15 @@ struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
   template <typename... Args>
   using ret_t = std::invoke_result_t<F, Args...>;
 
-  // The idiom used in the existing stdexec then example algorithm
-  // doesn't handle the void case in how it calls in to
-  // transform_completion_signatures_of. This is a workaround for that.
-  // TODO: is there a more graceful way to do this?
-  template <bool is_void, typename... Args>
-  struct set_value_signatures;
-
-  template <typename... Args>
-  struct set_value_signatures<true, Args...> {
-    using type = stdexec::completion_signatures<stdexec::set_value_t()>;
-  };
-
-  template <typename... Args>
-  struct set_value_signatures<false, Args...> {
-    using type =
-      stdexec::completion_signatures<stdexec::set_value_t(ret_t<Args...>)>;
-  };
-
-  template <typename... Args>
-  using set_value_t =
-    set_value_signatures<std::is_same_v<ret_t<Args...>, void>, Args...>::type;
+  template <typename... As>
+  using set_value_t = then_completions<std::is_same_v<ret_t<As...>, void>>::
+    template completions<ret_t<As...>, As...>;
 
   template <class Env>
   using completions_t = stdexec::transform_completion_signatures_of<
     S,
     Env,
-    stdexec::completion_signatures<stdexec::set_error_t(std::exception_ptr)>,
+    stdexec::completion_signatures<>,
     set_value_t>;
 
   template <class Env>
@@ -465,7 +447,6 @@ struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
     return {};
   }
 
-  // Connect:
   template <stdexec::receiver R>
     requires stdexec::sender_to<S, qthreads_then_receiver<R, F>>
   auto connect(R r) && {

@@ -103,8 +103,10 @@ auto main() -> int {
     then(stdexec::just(42), qthreads_context, sender_wrapper{task1, 0});
   stdexec::sender auto s2 =
     then(stdexec::just(42), qthreads_context, sender_wrapper{task2, 0});
-  auto val = stdexec::sync_wait(stdexec::when_all(s1, s2)).value();
-  // std::cout << std::get<0>(val) << std::endl;
+  // This does not work currently
+  // auto val = stdexec::sync_wait(stdexec::when_all(s1, s2).value();
+  auto val = stdexec::sync_wait(s1).value();
+  std::cout << std::get<0>(val) << std::endl;
 
   // Using sender_wrapper and sender_wrapper_receiver
   stdexec::sender auto s5 = sender_wrapper{task3};

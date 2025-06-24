@@ -9,8 +9,7 @@ struct example_one {
   example_one() {
     stdexec::sender auto my_sender =
       stdexec::schedule(stdexx::qthreads_scheduler{});
-    auto val = stdexec::sync_wait(my_sender).value();
-    std::cout << std::get<0>(val) << std::endl;
+    stdexec::sync_wait(std::move(my_sender));
   }
 };
 
@@ -18,17 +17,17 @@ struct example_two {
   example_two() {
     stdexec::sender auto my_sender =
       stdexec::schedule(stdexx::qthreads_scheduler{});
-    stdexec::sender auto algorithm = stdexec::then(my_sender, [](int arg) {
+    stdexec::sender auto algorithm = stdexec::then(std::move(my_sender), []() {
       std::puts("Hello from user-level thread in then-lambda");
       return 1;
     });
 
-    auto val = stdexec::sync_wait(algorithm).value();
+    auto val = stdexec::sync_wait(std::move(algorithm)).value();
     std::cout << std::get<0>(val) << std::endl;
   }
 };
 
-struct example_three {
+/*struct example_three {
   example_three() {
     stdexec::sender auto s =
       stdexec::schedule(stdexx::qthreads_scheduler{}) |
@@ -41,7 +40,7 @@ struct example_three {
       });
     stdexec::sync_wait(std::move(s));
   }
-};
+};*/
 
 /*
 struct example_four {
@@ -59,7 +58,8 @@ struct example_four {
 auto main() -> int {
   stdexx::init();
   using types =
-    std::variant<example_one, example_two, example_three /*, example_four*/>;
+    std::variant<example_one,
+                 example_two /*, example_three*/ /*, example_four*/>;
   std::vector<types> v = {{}, {}, {}, {}, {}};
   stdexx::finalize();
   return 0;

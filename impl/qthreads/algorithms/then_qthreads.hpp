@@ -85,5 +85,4 @@ auto then(Previous prev,
   return {ctx, prev, work};
 }
 
-} // namespace stdexx
-
+} // namespace stdexx 

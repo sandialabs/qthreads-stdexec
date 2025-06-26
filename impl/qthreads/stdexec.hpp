@@ -135,6 +135,8 @@ struct qt_os_base {
       stdexec::set_error(std::move(this->receiver), r);
     }
   }
+
+  inline void wait() noexcept { qthread_readFF(NULL, &feb); }
 };
 
 // Operation state for the case where we're just returning a sender
@@ -589,7 +591,7 @@ struct apply_sender_for<stdexec::sync_wait_t> {
     // operation state instead of accessing it directly.
     // Currently this works for our override of stdexec::then,
     // but there may be other stuff that requires the extra indirection.
-    qthread_readFF(NULL, &op.feb);
+    op.wait();
     return result;
   }
 };

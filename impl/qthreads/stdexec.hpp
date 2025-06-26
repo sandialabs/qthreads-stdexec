@@ -103,6 +103,14 @@ struct qthreads_scheduler {
   qthreads_sender schedule() const noexcept;
 };
 
+struct immovable {
+  immovable() = default;
+  immovable(immovable &&) = delete;
+  immovable(immovable const &) = delete;
+  immovable &operator=(immovable &&) = delete;
+  immovable &operator=(immovable const &) = delete;
+};
+
 // CRTP type used by the various operation states.
 // This implements the qthread_fork call and stores the FEB.
 // The associated qthread_readFF call happens during sync_wait
@@ -111,17 +119,12 @@ struct qthreads_scheduler {
 // function that gets passed th qthread_fork as well as any
 // additional init/deinit they may need.
 template <typename Derived_Op_State, typename Receiver>
-struct qt_os_base {
+struct qt_os_base : immovable {
   aligned_t feb;
   Receiver receiver;
 
   template <typename Receiver_>
   qt_os_base(Receiver_ &&r): feb(0u), receiver(std::forward<Receiver_>(r)) {}
-
-  qt_os_base(qt_os_base &&) = delete;
-  qt_os_base(qt_os_base const &) = delete;
-  qt_os_base &operator=(qt_os_base &&) = delete;
-  qt_os_base &operator=(qt_os_base const &) = delete;
 
   inline void start() noexcept {
     auto st = stdexec::get_stop_token(stdexec::get_env(receiver));

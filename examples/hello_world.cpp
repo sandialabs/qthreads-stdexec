@@ -14,6 +14,7 @@ auto main() -> int {
   stdexx::init();
 
   // Basic example:
+  ///*
   stdexec::sender auto begin = stdexec::schedule(stdexx::qthreads_scheduler{});
   stdexec::sender auto hi_again = stdexec::then(std::move(begin), []() {
     std::cout << "Hello world! Have an int.\n";
@@ -62,6 +63,9 @@ auto main() -> int {
                        std::cout << "then after basic func sender: " << val
                                  << std::endl;
                      }));
+  //*/
+  // stdexec::sync_wait(stdexec::when_all(stdexx::qthreads_just_sender(1),
+  // stdexx::qthreads_just_sender(2)));
 
   stdexx::finalize();
   return 0;

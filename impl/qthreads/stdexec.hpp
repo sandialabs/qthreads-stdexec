@@ -459,6 +459,80 @@ struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
   }
 };
 
+// Roughly adapted from the nvexec when_all customization.
+// This does a bunch of work to derive the completion signatures for
+// when_all based on the completion signatures of the various
+// senders passed to it.
+namespace when_all {
+template <class Sender, class... Env>
+concept valid_child_sender = stdexec::sender_in<Sender, Env...> && requires {
+  requires(
+    stdexec::__v<stdexec::__count_of<stdexec::set_value_t, Sender, Env...>> <=
+    1);
+};
+
+template <class Sender, class... Env>
+concept too_many_completions_sender =
+  stdexec::sender_in<Sender, Env...> && requires {
+    requires(
+      stdexec::__v<stdexec::__count_of<stdexec::set_value_t, Sender, Env...>> >
+      1);
+  };
+
+template <class Env, class... Senders>
+struct completions {};
+
+template <class... Env, class... Senders>
+  requires(too_many_completions_sender<Senders, Env...> || ...)
+struct completions<stdexec::__types<Env...>, Senders...> {
+  static constexpr auto position_of() noexcept -> std::size_t {
+    constexpr bool which[] = {too_many_completions_sender<Senders, Env...>...};
+    return stdexec::__pos_of(which, which + sizeof...(Senders));
+  }
+
+  using InvalidArg = stdexec::__m_at_c<position_of(), Senders...>;
+  using __t =
+    stdexec::__when_all::__too_many_value_completions_error<InvalidArg, Env...>;
+};
+
+template <class... Env, class... Senders>
+  requires(valid_child_sender<Senders, Env...> && ...)
+struct completions<stdexec::__types<Env...>, Senders...> {
+  using non_values = stdexec::__meval<
+    stdexec::__concat_completion_signatures,
+    stdexec::completion_signatures<>,
+    stdexec::transform_completion_signatures<
+      stdexec::__completion_signatures_of_t<Senders, Env...>,
+      stdexec::completion_signatures<>,
+      stdexec::__mconst<stdexec::completion_signatures<>>::__f>...>;
+  using values =
+    stdexec::__minvoke<stdexec::__mconcat<stdexec::__qf<stdexec::set_value_t>>,
+                       stdexec::__value_types_t<
+                         stdexec::__completion_signatures_of_t<Senders, Env...>,
+                         stdexec::__q<stdexec::__types>,
+                         stdexec::__msingle_or<stdexec::__types<>>>...>;
+  using __t = stdexec::__if_c<
+    (stdexec::__sends<stdexec::set_value_t, Senders, Env...> && ...),
+    stdexec::__minvoke<
+      stdexec::__mpush_back<stdexec::__q<stdexec::completion_signatures>>,
+      non_values,
+      values>,
+    non_values>;
+};
+} // namespace when_all
+
+// TODO: Need when_all operation state here.
+// It needs to set up each operation state for the wrapped senders.
+// On start it needs to start all of the contained qthreads operation states.
+// On sync_wait it should...? call a wait method all the operation states should
+// export?
+
+template <is_qthreads_sender... S>
+struct qthreads_when_all_sender :
+  qthreads_base_sender<qthreads_when_all_sender<S...>> {
+  //;
+};
+
 // Our transform_sender override calls into this for implementing stdexec::then.
 template <>
 struct transform_sender_for<stdexec::then_t> {
@@ -470,6 +544,21 @@ struct transform_sender_for<stdexec::then_t> {
     // All we need to do here is construct the associated sender from it.
     return qthreads_then_sender<Sender, Fn>{
       {}, static_cast<Sender &&>(sndr), static_cast<Fn &&>(fun)};
+  }
+};
+
+// Customization for stdexec::when_all
+template <>
+struct transform_sender_for<stdexec::when_all_t> {
+  template <typename... Senders>
+  auto
+  operator()(stdexec::__ignore, stdexec::__ignore, Senders &&...sndrs) const {
+    static_assert(false, "made it to correct customization.");
+    /*using __sender_t =
+      __t<when_all_sender_t<stdexec::when_all_t, stream_scheduler,
+    __id<__decay_t<Senders>>...>>; return __sender_t{ context_state_t{nullptr,
+    nullptr, nullptr, nullptr}, static_cast<Senders&&>(sndrs)...
+    };*/
   }
 };
 

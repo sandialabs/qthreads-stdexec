@@ -231,6 +231,69 @@ struct basic_func_operation_state :
   }
 };
 
+template <typename Receiver, typename... Senders>
+struct when_all_op_state : immovable {
+  Receiver receiver;
+
+  // Rough outline of what needs to happen:
+  //   - At init this inits all the wrapped operation states.
+  //   - At connect, it connects an internal receiver to each
+  //     wrapped sender.
+  //   - At start this starts all the wrapped operation states.
+  //   - When set_value is called on one of the internal receivers it
+  //     just stores the value in its entry in the tuple.
+  //     Whichever one ends last should call (or somehow trigger the call to)
+  //     set_value for the outer receiver that expects the whole tuple
+  //     of values.
+  //     Note, given that there's no a-priori way to determine which
+  //     operation will complete first, there needs to be an atomic
+  //     counter to determine which set_value call happens last
+  //     so that the outer set_value call can happen.
+  //   - On wait, it waits all the operation states one after the other.
+  // TODO: a tuple of the operation state types from each sender
+  // TODO: a tuple of the return value from each sender.
+  //   WHAT ON EARTH happens if one of the wrapped senders has multiple possible
+  //   return values? Pretty sure that's a case we can (hopefully) ignore for
+  //   qthreads-based senders. Maybe? Note: the cuda example seems to want to
+  //   ALLOCATE the tuple for the return values!?!? It will likely be fine to
+  //   just store that tuple as a value in this struct instead? Note: The
+  //   existing when_all seems to return a... tuple of tuples of returns?
+  // TODO: a set of forwarding receivers that forward what they get out of
+  //   set_value into the final tuple returned by when_all.
+  //   Note: Since the tuple has to be indexed by compile-time indices,
+  //   the index needs to be a template parameter there too.
+  //   TODO: each of these things needs to have some kind of reference
+  //   to the outer receiver as well as the associated tuple of
+  //   return values and the atomic counter counting when to
+  //   call the outer set_value. What's the right idiom for this?
+  // TODO: Add a layer of indirection inside each tuple element
+  //   that ensures each entry has its own cache line.
+  //   This is likely kind-of complicated so do this later.
+  //   On the other hand, a whole cache line seems like total overkill
+  //   for like... a couple ints or something. In theory we could end up
+  //   in a situation where the compiler optimizes out the whole
+  //   extra buffer of stuff. On the other hand, it could not
+  //   be optimizing out a bunch of this template machinery too
+  //   which would also be harmful. I don't know how to
+  //   get it to optimize away the right parts here.
+  //   We should probably test how much this even matters for
+  //   the existing qthreads APIs before trying to guarantee separate
+  //   cache lines here.
+
+  template <typename Receiver_>
+  when_all_op_state(Receiver_ &&r): receiver(std::forward<Receiver_>(r)) {
+    // TODO: connect all the wrapped senders to the inner receivers here.
+  }
+
+  inline void start() noexcept {
+    // TODO: start all the wrapped operation states here.
+  }
+
+  inline void wait() noexcept {
+    // TODO: readFF everything here.
+  }
+};
+
 // Associated env for all qthreads sender types.
 // TODO: why did they design the env to be distinct from the domain and
 // scheduler?

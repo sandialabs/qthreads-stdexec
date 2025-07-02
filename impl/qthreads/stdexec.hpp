@@ -589,12 +589,6 @@ struct completions<stdexec::__types<Env...>, Senders...> {
 };
 } // namespace when_all
 
-// TODO: Need when_all operation state here.
-// It needs to set up each operation state for the wrapped senders.
-// On start it needs to start all of the contained qthreads operation states.
-// On sync_wait it should...? call a wait method all the operation states should
-// export?
-
 template <is_qthreads_sender... S>
 struct qthreads_when_all_sender :
   qthreads_base_sender<qthreads_when_all_sender<S...>> {
@@ -629,6 +623,10 @@ struct transform_sender_for<stdexec::when_all_t> {
     };*/
   }
 };
+
+// TODO: the local_state and result receiver include some useless
+// details left over from the default sync_wait. We should remove them.
+// For now, they don't interfere with anything so it's not critical.
 
 template <>
 struct apply_sender_for<stdexec::sync_wait_t> {

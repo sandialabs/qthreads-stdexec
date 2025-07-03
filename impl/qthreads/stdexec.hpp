@@ -17,6 +17,19 @@ int init() { return qthread_initialize(); }
 
 void finalize() { qthread_finalize(); }
 
+template <typename T>
+struct is_index_sequence_impl {
+  static constexpr bool val = false;
+};
+
+template <std::size_t... I>
+struct is_index_sequence_impl<std::index_sequence<I...>> {
+  static constexpr bool val = true;
+};
+
+template <typename T>
+concept is_index_sequence = is_index_sequence_impl<T>::val;
+
 struct qthreads_domain;
 struct qthreads_scheduler;
 struct qthreads_env;
@@ -267,6 +280,27 @@ struct when_all_item_receiver {
 
 template <typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
+  template <std::size_t I>
+  using item_receiver =
+    when_all_item_receiver<when_all_op_state<Receiver, Senders...>, I>;
+  template <typename T>
+    requires is_index_sequence<T>
+  struct infer_tuple_types;
+
+  template <std::size_t... I>
+  struct infer_tuple_types<std::index_sequence<I...>> {
+    using receiver_tuple_type_impl = std::tuple<item_receiver<I>...>;
+    using os_tuple_type_impl = std::tuple<decltype(stdexec::connect(
+      std::declval<Senders...[I]>(), std::declval<item_receiver<I>>()))...>;
+  };
+
+  using internal_receiver_tuple_type = infer_tuple_types<
+    std::make_index_sequence<sizeof...(Senders)>>::receiver_tuple_type_impl;
+  internal_receiver_tuple_type internal_receivers;
+  using internal_op_state_tuple_type = infer_tuple_types<
+    std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
+  internal_op_state_tuple_type internal_op_states;
+
   Receiver receiver;
 
   // Rough outline of what needs to happen:

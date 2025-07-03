@@ -103,6 +103,16 @@ struct qthreads_scheduler {
   qthreads_sender schedule() const noexcept;
 };
 
+// Associated env for all qthreads sender types.
+// TODO: why did they design the env to be distinct from the domain and
+// scheduler?
+struct qthreads_env {
+  qthreads_scheduler get_completion_scheduler() const noexcept { return {}; }
+
+  friend qthreads_domain tag_invoke(stdexec::get_domain_t const,
+                                    qthreads_env const &) noexcept;
+};
+
 struct immovable {
   immovable() = default;
   immovable(immovable &&) = delete;
@@ -232,6 +242,30 @@ struct basic_func_operation_state :
 };
 
 template <typename Receiver, typename... Senders>
+struct when_all_op_state;
+
+template <typename outer_op_state_t, std::size_t Index>
+struct when_all_item_receiver {
+  outer_op_state_t *op;
+
+  qthreads_env get_env() const noexcept { return {}; }
+
+  template <typename... V>
+  __attribute__((always_inline)) void set_value(V &&...vals) && noexcept {
+    op->template _set_value<Index>(static_cast<V &&>(vals)...);
+  }
+
+  template <typename E>
+  __attribute__((always_inline)) void set_error(E &&e) && noexcept {
+    op->template _set_error<Index>(static_cast<E &&>(e));
+  }
+
+  __attribute__((always_inline)) void set_stopped() && noexcept {
+    op->set_stopped();
+  }
+};
+
+template <typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
   Receiver receiver;
 
@@ -292,16 +326,6 @@ struct when_all_op_state : immovable {
   inline void wait() noexcept {
     // TODO: readFF everything here.
   }
-};
-
-// Associated env for all qthreads sender types.
-// TODO: why did they design the env to be distinct from the domain and
-// scheduler?
-struct qthreads_env {
-  qthreads_scheduler get_completion_scheduler() const noexcept { return {}; }
-
-  friend qthreads_domain tag_invoke(stdexec::get_domain_t const,
-                                    qthreads_env const &) noexcept;
 };
 
 // CRTP base class for various qthreads sender types.

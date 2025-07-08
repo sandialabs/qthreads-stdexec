@@ -38,7 +38,7 @@ decltype(auto)
 apply_across_impl(std::index_sequence<I...>, Func &&func, Args &&...args) {
   // deliberately decaying to (possibly const) lvalue references by
   // not forwarding since the function call potentially happens many times.
-  return std::make_tuple(apply_at_index<I>(args...)...);
+  return std::make_tuple(apply_at_index<I>(func, args...)...);
 }
 
 // apply_across is like std::apply, but applies an operation
@@ -58,6 +58,14 @@ decltype(auto) apply_across(Func &&func, Args &&...args) {
                            static_cast<Func &&>(func),
                            static_cast<Args &&>(args)...);
 }
+
+// compile-time unit test for apply_across.
+static_assert(
+  std::is_same_v<decltype(apply_across(
+                   [](size_t a, size_t b) { return a + b; },
+                   std::declval<std::tuple<std::size_t, std::size_t>>(),
+                   std::declval<std::tuple<std::size_t, std::size_t>>())),
+                 std::tuple<std::size_t, std::size_t>>);
 
 } // namespace stdexx
 

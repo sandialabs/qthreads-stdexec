@@ -275,14 +275,23 @@ struct when_all_op_state : immovable {
       std::declval<Senders...[I]>(), std::declval<item_receiver<I>>()))...>;
   };
 
+  using wrapped_senders_tuple_type = std::tuple<Senders...>;
   using internal_receiver_tuple_type = infer_tuple_types<
     std::make_index_sequence<sizeof...(Senders)>>::receiver_tuple_type_impl;
-  internal_receiver_tuple_type internal_receivers;
   using internal_op_state_tuple_type = infer_tuple_types<
     std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
+
+  std::atomic<std::size_t> completion_counter = sizeof...(Senders);
+  Receiver receiver;
+  wrapped_senders_tuple_type wrapped_senders;
+  internal_receiver_tuple_type internal_receivers;
   internal_op_state_tuple_type internal_op_states;
 
-  Receiver receiver;
+  // Called by the wrapped receivers' set_value
+  template <std::size_t Index, typename... V>
+  void _set_value(V &&...vals) {
+    ;
+  }
 
   // Rough outline of what needs to happen:
   //   - At init this inits all the wrapped operation states.

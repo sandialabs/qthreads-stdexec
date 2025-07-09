@@ -67,6 +67,110 @@ static_assert(
                    std::declval<std::tuple<std::size_t, std::size_t>>())),
                  std::tuple<std::size_t, std::size_t>>);
 
+// indices_from_condition takes a condition and a pack of types and
+// generates an index sequence of the indices in the pack of types
+// that satisfy the condition.
+
+// TODO: once we get reliable compiler support for
+// variable template template parameters we can get rid of
+// the condition::value redirection.
+
+template <typename T, template <typename> typename condition>
+concept satisfies_condition = condition<T>::value;
+
+template <template <typename> typename condition,
+          std::size_t current_index,
+          typename indices,
+          typename... Ts>
+struct indices_from_condition_impl;
+
+// empty list of types case
+template <template <typename> typename condition>
+struct indices_from_condition_impl<condition, 0uz, std::index_sequence<>> {
+  using indices = std::index_sequence<>;
+};
+
+// Recursion base case
+template <template <typename> typename condition,
+          std::size_t current_index,
+          std::size_t... Ix,
+          typename T>
+struct indices_from_condition_impl<condition,
+                                   current_index,
+                                   std::index_sequence<Ix...>,
+                                   T> {
+  using indices = std::conditional_t<condition<T>::value,
+                                     std::index_sequence<Ix..., current_index>,
+                                     std::index_sequence<Ix...>>;
+};
+
+// Actual recursive case for true condition branch.
+template <template <typename> typename condition,
+          std::size_t current_index,
+          std::size_t... Ix,
+          typename T,
+          typename... Ts>
+  requires satisfies_condition<T, condition>
+struct indices_from_condition_impl<condition,
+                                   current_index,
+                                   std::index_sequence<Ix...>,
+                                   T,
+                                   Ts...> {
+  static_assert(sizeof...(Ts),
+                "Empty parameter pack case should be handled by a different "
+                "template candidate.");
+  using indices =
+    indices_from_condition_impl<condition,
+                                current_index + 1uz,
+                                std::index_sequence<Ix..., current_index>,
+                                Ts...>::indices;
+};
+
+// Actual recursive case for the false condition branch.
+template <template <typename> typename condition,
+          std::size_t current_index,
+          std::size_t... Ix,
+          typename T,
+          typename... Ts>
+struct indices_from_condition_impl<condition,
+                                   current_index,
+                                   std::index_sequence<Ix...>,
+                                   T,
+                                   Ts...> {
+  static_assert(sizeof...(Ts),
+                "Empty parameter pack case should be handled by a different "
+                "template candidate.");
+  using indices = indices_from_condition_impl<condition,
+                                              current_index + 1uz,
+                                              std::index_sequence<Ix...>,
+                                              Ts...>::indices;
+};
+
+// Assert that this case isn't reached since recursion should have already hit
+// the base case.
+template <template <typename> typename condition,
+          std::size_t current_index,
+          std::size_t... Ix>
+struct indices_from_condition_impl<condition,
+                                   current_index,
+                                   std::index_sequence<Ix...>> {
+  static_assert(false, "Recursion logic error in indices_from_condition_impl");
+};
+
+template <template <typename> typename condition, typename... Ts>
+using indices_from_condition =
+  indices_from_condition_impl<condition, 0uz, std::index_sequence<>, Ts...>::
+    indices;
+
+// Unit test for indices_from_condition
+struct test_indices_from_condition {
+  template <typename T>
+  using is_int = std::is_same<T, int>;
+  using result =
+    indices_from_condition<is_int, int, float, float, int, double, int>;
+  static_assert(std::is_same_v<result, std::index_sequence<0uz, 3uz, 5uz>>);
+};
+
 } // namespace stdexx
 
 #endif // #ifndef QTHREADS_STDEXEC_COMMON_HPP

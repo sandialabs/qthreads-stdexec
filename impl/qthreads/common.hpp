@@ -171,6 +171,21 @@ struct test_indices_from_condition {
   static_assert(std::is_same_v<result, std::index_sequence<0uz, 3uz, 5uz>>);
 };
 
+// apply_at_indices:
+// build a tuple type by applying a template
+// only at given indices of a parameter pack of types.
+template <template <typename> typename Op, typename Indices, typename... Ts>
+struct apply_at_indices_impl;
+
+template <template <typename> typename Op, std::size_t... Ix, typename... Ts>
+struct apply_at_indices_impl<Op, std::index_sequence<Ix...>, Ts...> {
+  // TODO: assert the max of the index sequence is less than sizeof...(Ts)
+  using type = std::tuple<Op<Ts...[Ix]>...>;
+};
+
+template <template <typename> typename Op, typename Indices, typename... Ts>
+using apply_at_indices = apply_at_indices_impl<Op, Indices, Ts...>::type;
+
 } // namespace stdexx
 
 #endif // #ifndef QTHREADS_STDEXEC_COMMON_HPP

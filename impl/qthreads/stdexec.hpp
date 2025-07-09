@@ -287,9 +287,44 @@ struct when_all_op_state : immovable {
   internal_receiver_tuple_type internal_receivers;
   internal_op_state_tuple_type internal_op_states;
 
+  // A simplified API for getting the return type associated with each sender.
+  // stdexec::when_all has already confirmed that all the senders are from
+  // the same domain, so we can assume that all the senders are some kind
+  // of qthreads sender which means we know:
+  // - they don't return multiple types, so variants aren't needed
+  // - they return a single value in their call to set_value
+  // - they use the qthreads_env
+  // TODO: currently these are fine limitations,
+  //   but what are the cases where they might not be true
+  //   and how should they be handled here?
+  // This still wraps the type in a tuple so that it'll work
+  // for senders that don't actually return a value either.
+  template <typename S>
+  using ret_tuple_of_qthreads_sender =
+    stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>;
+
+  template <typename S>
+  struct does_not_return_void {
+    bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
+  };
+
+  using non_void_value_indices =
+    indices_from_condition<does_not_return_void, Senders...>;
+
   // Called by the wrapped receivers' set_value
-  template <std::size_t Index, typename... V>
-  void _set_value(V &&...vals) {
+  // No existing qthreads senders send more than a single value
+  // so we don't currently need to handle the
+  // multi-return-value case here.
+  // TODO: what even is the expected behavior for when_all in that case?
+  template <std::size_t Index, typename V>
+  void _set_value(V &&val) {
+    using expected_ret_t =
+      std::tuple_element_t<0uz,
+                           ret_tuple_of_qthreads_sender<Senders...[Index]>>;
+    static_assert(
+      std::is_same_v<V, expected_ret_t>,
+      "Mismatch between the return type passed to set_value and the type "
+      "specified by the corresponding completion signatures.");
     ;
   }
 

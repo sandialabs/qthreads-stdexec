@@ -308,8 +308,12 @@ struct when_all_op_state : immovable {
     bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
   };
 
+  // Indices mapping non-void output values to input senders.
   using non_void_value_indices =
     indices_from_condition<does_not_return_void, Senders...>;
+  // Indices mapping input senders to non-void output values.
+  using ret_value_reverse_indices =
+    reverse_indices_from_condition<does_not_return_void, Senders...>;
 
   // Called by the wrapped receivers' set_value
   // No existing qthreads senders send more than a single value

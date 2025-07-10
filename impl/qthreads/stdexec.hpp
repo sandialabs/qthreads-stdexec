@@ -322,6 +322,9 @@ struct when_all_op_state : immovable {
   // TODO: what even is the expected behavior for when_all in that case?
   template <std::size_t Index, typename V>
   void _set_value(V &&val) {
+    static constexpr std::size_t output_index =
+      get_at_index<ret_value_reverse_indices, Index>;
+    static_assert(output_index != std::numeric_limits<std::size_t>::max());
     using expected_ret_t =
       std::tuple_element_t<0uz,
                            ret_tuple_of_qthreads_sender<Senders...[Index]>>;
@@ -329,7 +332,6 @@ struct when_all_op_state : immovable {
       std::is_same_v<V, expected_ret_t>,
       "Mismatch between the return type passed to set_value and the type "
       "specified by the corresponding completion signatures.");
-    ;
   }
 
   // Rough outline of what needs to happen:

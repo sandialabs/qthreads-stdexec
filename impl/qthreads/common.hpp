@@ -81,94 +81,139 @@ concept satisfies_condition = condition<T>::value;
 template <template <typename> typename condition,
           std::size_t current_index,
           typename indices,
+          typename reverse_indices,
           typename... Ts>
 struct indices_from_condition_impl;
 
 // empty list of types case
 template <template <typename> typename condition>
-struct indices_from_condition_impl<condition, 0uz, std::index_sequence<>> {
+struct indices_from_condition_impl<condition,
+                                   0uz,
+                                   std::index_sequence<>,
+                                   std::index_sequence<>> {
   using indices = std::index_sequence<>;
+  using reverse_indices = std::index_sequence<>;
 };
 
 // Recursion base case
 template <template <typename> typename condition,
           std::size_t current_index,
           std::size_t... Ix,
+          std::size_t... RIx,
           typename T>
 struct indices_from_condition_impl<condition,
                                    current_index,
                                    std::index_sequence<Ix...>,
+                                   std::index_sequence<RIx...>,
                                    T> {
   using indices = std::conditional_t<condition<T>::value,
                                      std::index_sequence<Ix..., current_index>,
                                      std::index_sequence<Ix...>>;
+  using reverse_indices = std::conditional_t<
+    condition<T>::value,
+    std::index_sequence<RIx..., sizeof...(Ix)>,
+    std::index_sequence<RIx..., std::numeric_limits<std::size_t>::max()>>;
 };
 
 // Actual recursive case for true condition branch.
+// Do the condition test in a requires clause to avoid
+// instantiating both branches.
 template <template <typename> typename condition,
           std::size_t current_index,
           std::size_t... Ix,
+          std::size_t... RIx,
           typename T,
           typename... Ts>
   requires satisfies_condition<T, condition>
 struct indices_from_condition_impl<condition,
                                    current_index,
                                    std::index_sequence<Ix...>,
+                                   std::index_sequence<RIx...>,
                                    T,
                                    Ts...> {
   static_assert(sizeof...(Ts),
                 "Empty parameter pack case should be handled by a different "
                 "template candidate.");
-  using indices =
+  using recurse =
     indices_from_condition_impl<condition,
                                 current_index + 1uz,
                                 std::index_sequence<Ix..., current_index>,
-                                Ts...>::indices;
+                                std::index_sequence<RIx..., sizeof...(Ix)>,
+                                Ts...>;
+  using indices = recurse::indices;
+  using reverse_indices = recurse::reverse_indices;
 };
 
 // Actual recursive case for the false condition branch.
 template <template <typename> typename condition,
           std::size_t current_index,
           std::size_t... Ix,
+          std::size_t... RIx,
           typename T,
           typename... Ts>
 struct indices_from_condition_impl<condition,
                                    current_index,
                                    std::index_sequence<Ix...>,
+                                   std::index_sequence<RIx...>,
                                    T,
                                    Ts...> {
   static_assert(sizeof...(Ts),
                 "Empty parameter pack case should be handled by a different "
                 "template candidate.");
-  using indices = indices_from_condition_impl<condition,
-                                              current_index + 1uz,
-                                              std::index_sequence<Ix...>,
-                                              Ts...>::indices;
+  static_assert(
+    !condition<T>::value,
+    "True case should be handled by a different template candidate.");
+  using recurse = indices_from_condition_impl<
+    condition,
+    current_index + 1uz,
+    std::index_sequence<Ix...>,
+    std::index_sequence<RIx..., std::numeric_limits<std::size_t>::max()>,
+    Ts...>;
+  using indices = recurse::indices;
+  using reverse_indices = recurse::reverse_indices;
 };
 
 // Assert that this case isn't reached since recursion should have already hit
 // the base case.
 template <template <typename> typename condition,
           std::size_t current_index,
-          std::size_t... Ix>
+          std::size_t... Ix,
+          std::size_t... RIx>
 struct indices_from_condition_impl<condition,
                                    current_index,
-                                   std::index_sequence<Ix...>> {
+                                   std::index_sequence<Ix...>,
+                                   std::index_sequence<RIx...>> {
   static_assert(false, "Recursion logic error in indices_from_condition_impl");
 };
 
 template <template <typename> typename condition, typename... Ts>
 using indices_from_condition =
-  indices_from_condition_impl<condition, 0uz, std::index_sequence<>, Ts...>::
-    indices;
+  indices_from_condition_impl<condition,
+                              0uz,
+                              std::index_sequence<>,
+                              std::index_sequence<>,
+                              Ts...>::indices;
+
+template <template <typename> typename condition, typename... Ts>
+using reverse_indices_from_condition =
+  indices_from_condition_impl<condition,
+                              0uz,
+                              std::index_sequence<>,
+                              std::index_sequence<>,
+                              Ts...>::reverse_indices;
 
 // Unit test for indices_from_condition
 struct test_indices_from_condition {
   template <typename T>
   using is_int = std::is_same<T, int>;
-  using result =
+  using indices =
     indices_from_condition<is_int, int, float, float, int, double, int>;
-  static_assert(std::is_same_v<result, std::index_sequence<0uz, 3uz, 5uz>>);
+  using reverse_indices =
+    reverse_indices_from_condition<is_int, int, float, float, int, double, int>;
+  static constexpr std::size_t mx = std::numeric_limits<std::size_t>::max();
+  static_assert(std::is_same_v<indices, std::index_sequence<0uz, 3uz, 5uz>>);
+  static_assert(std::is_same_v<reverse_indices,
+                               std::index_sequence<0uz, mx, mx, 1uz, mx, 2uz>>);
 };
 
 // apply_at_indices:

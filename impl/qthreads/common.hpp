@@ -231,6 +231,17 @@ struct apply_at_indices_impl<Op, std::index_sequence<Ix...>, Ts...> {
 template <template <typename> typename Op, typename Indices, typename... Ts>
 using apply_at_indices = apply_at_indices_impl<Op, Indices, Ts...>::type;
 
+template <typename T, std::size_t Ix>
+struct get_at_index_impl;
+
+template <std::size_t Ix, std::size_t... Ixs>
+struct get_at_index_impl<std::index_sequence<Ixs...>, Ix> {
+  static constexpr std::size_t value = Ixs...[Ix];
+};
+
+template <typename T, std::size_t Ix>
+static constexpr std::size_t get_at_index = get_at_index_impl<T, Ix>::value;
+
 } // namespace stdexx
 
 #endif // #ifndef QTHREADS_STDEXEC_COMMON_HPP

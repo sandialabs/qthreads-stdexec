@@ -281,12 +281,6 @@ struct when_all_op_state : immovable {
   using internal_op_state_tuple_type = infer_tuple_types<
     std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
 
-  std::atomic<std::size_t> completion_counter = sizeof...(Senders);
-  Receiver receiver;
-  wrapped_senders_tuple_type wrapped_senders;
-  internal_receiver_tuple_type internal_receivers;
-  internal_op_state_tuple_type internal_op_states;
-
   // A simplified API for getting the return type associated with each sender.
   // stdexec::when_all has already confirmed that all the senders are from
   // the same domain, so we can assume that all the senders are some kind
@@ -303,6 +297,12 @@ struct when_all_op_state : immovable {
   using ret_tuple_of_qthreads_sender =
     stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>;
 
+  // Get the wrapped return type for something that's known to
+  // return something other than void.
+  template <typename S>
+  using ret_type_of_qthreads_sender =
+    std::tuple_element_t<0, ret_tuple_of_qthreads_sender<S>>;
+
   template <typename S>
   struct does_not_return_void {
     bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
@@ -314,6 +314,17 @@ struct when_all_op_state : immovable {
   // Indices mapping input senders to non-void output values.
   using ret_value_reverse_indices =
     reverse_indices_from_condition<does_not_return_void, Senders...>;
+
+  using ret_tuple_type = apply_at_indices<ret_type_of_qthreads_sender,
+                                          non_void_value_indices,
+                                          Senders...>;
+
+  ret_tuple_type ret_tuple;
+  std::atomic<std::size_t> completion_counter = sizeof...(Senders);
+  Receiver receiver;
+  wrapped_senders_tuple_type wrapped_senders;
+  internal_receiver_tuple_type internal_receivers;
+  internal_op_state_tuple_type internal_op_states;
 
   // Called by the wrapped receivers' set_value
   // No existing qthreads senders send more than a single value

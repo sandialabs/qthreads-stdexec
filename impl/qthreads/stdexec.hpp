@@ -334,7 +334,7 @@ struct when_all_op_state : immovable {
   // multi-return-value case here.
   // TODO: what even is the expected behavior for when_all in that case?
   template <std::size_t Index, typename V>
-  void _set_value(V &&val) {
+  void _set_value(V &&val) noexcept {
     static constexpr std::size_t output_index =
       get_at_index<ret_value_reverse_indices, Index>;
     static_assert(output_index != std::numeric_limits<std::size_t>::max());

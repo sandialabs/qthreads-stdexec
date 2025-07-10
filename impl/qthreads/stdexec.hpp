@@ -319,6 +319,8 @@ struct when_all_op_state : immovable {
                                           non_void_value_indices,
                                           Senders...>;
 
+  // TODO: should we try to make sure the return values and/or the
+  // atomic counter are on separate cache lines?
   ret_tuple_type ret_tuple;
   std::atomic<std::size_t> completion_counter = sizeof...(Senders);
   Receiver receiver;
@@ -343,6 +345,11 @@ struct when_all_op_state : immovable {
       std::is_same_v<V, expected_ret_t>,
       "Mismatch between the return type passed to set_value and the type "
       "specified by the corresponding completion signatures.");
+    std::get<output_index>(ret_tuple) = std::move(val);
+    if (!completion_counter.fetch_sub(1uz, std::memory_order_relaxed)) {
+      std::apply([this](auto... args) { this->receiver.set_value(args...); },
+                 ret_tuple);
+    }
   }
 
   // Rough outline of what needs to happen:

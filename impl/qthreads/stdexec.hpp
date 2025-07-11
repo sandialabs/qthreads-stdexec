@@ -270,14 +270,10 @@ struct when_all_op_state : immovable {
 
   template <std::size_t... I>
   struct infer_tuple_types<std::index_sequence<I...>> {
-    using receiver_tuple_type_impl = std::tuple<item_receiver<I>...>;
     using os_tuple_type_impl = std::tuple<decltype(stdexec::connect(
       std::declval<Senders...[I]>(), std::declval<item_receiver<I>>()))...>;
   };
 
-  using wrapped_senders_tuple_type = std::tuple<Senders...>;
-  using internal_receiver_tuple_type = infer_tuple_types<
-    std::make_index_sequence<sizeof...(Senders)>>::receiver_tuple_type_impl;
   using internal_op_state_tuple_type = infer_tuple_types<
     std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
 
@@ -319,15 +315,78 @@ struct when_all_op_state : immovable {
                                           non_void_value_indices,
                                           Senders...>;
 
+  // Trick to initialize immovable operation states in-place inside
+  // our tuple of inner operation states.
+  // Relies on C++17 guaranteed copy elision.
+  // See https://stackoverflow.com/a/75594252
+  template <typename S, typename R>
+  struct op_state_converter {
+    std::tuple<S, R> args;
+
+    op_state_converter(S &&s, R &&r) noexcept:
+      args{static_cast<S &&>(s), static_cast<R &&>(r)} {}
+
+    using op_state =
+      decltype(stdexec::connect(std::declval<S>(), std::declval<R>()));
+
+    // Guaranteed copy elision here allows constructing
+    // the operation state in-place when initializing a tuple
+    // of operation states.
+    operator op_state() && {
+      return stdexec::connect(std::move(std::get<0>(args)),
+                              std::move(std::get<1>(args)));
+    }
+  };
+
+  // Need to associate indices with the sender types
+  // to connect them with the appropriate receivers
+  // when building the tuple of internal operation states.
+  // This tuple type exists so that we can do that pairing of indices.
+  // Unfortunately it adds a syntactic layer of indirection for
+  // accessing the tuple of operation states.
+  template <typename>
+  struct op_states_t;
+
+  // Helper function used immediately below in the op_state tuple init.
+  template <std::size_t I>
+  decltype(auto) internal_receiver_gen(Senders &&...senders) noexcept {
+    return op_state_converter{when_all_item_receiver<decltype(*this), I>{this},
+                              std::move(senders...[I])};
+  }
+
+  template <std::size_t... Ix>
+  struct op_states_t<std::index_sequence<Ix...>> {
+    internal_op_state_tuple_type tup;
+
+    op_states_t(Senders &&...senders) noexcept:
+      tup{op_state_converter{when_all_item_receiver<decltype(*this), Ix>{this},
+                             std::move(senders...[Ix])}...} {}
+
+    template <std::size_t I>
+    decltype(auto) get() noexcept {
+      return std::get<I>(tup);
+    }
+  };
+
   // TODO: should we try to make sure the return values and/or the
   // atomic counter are on separate cache lines?
+  // Note: currently we require the ret_tuple values to all be
+  // trivially initializable and movable. Its not clear if there
+  // are ways to relax those constraints much.
   ret_tuple_type ret_tuple;
-  std::atomic<std::size_t> completion_counter = sizeof...(Senders);
-  std::atomic<std::size_t> error_counter = 0uz;
+  std::atomic<std::size_t> completion_counter;
+  std::atomic<std::size_t> error_counter;
   Receiver receiver;
-  wrapped_senders_tuple_type wrapped_senders;
-  internal_receiver_tuple_type internal_receivers;
-  internal_op_state_tuple_type internal_op_states;
+  // Need an extra layer of indirection here to be able
+  // to construct these things in-place.
+  op_states_t<std::make_index_sequence<sizeof...(Senders)>> internal_op_states;
+
+  when_all_op_state(Receiver &&r, Senders &&...senders) noexcept:
+    internal_op_states{static_cast<Senders &&>(senders)...},
+    receiver{std::move(r)} {
+    completion_counter.store(sizeof...(Senders), std::memory_order_relaxed);
+    error_counter.store(0uz, std::memory_order_relaxed);
+  }
 
   // Called by the wrapped receivers' set_value
   // No existing qthreads senders send more than a single value

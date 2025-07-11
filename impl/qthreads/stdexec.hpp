@@ -487,11 +487,13 @@ struct when_all_op_state : immovable {
   //   cache lines here.
 
   inline void start() noexcept {
-    // TODO: start all the wrapped operation states here.
+    // Start all the wrapped operation states.
+    apply_across(stdexec::start, internal_op_states.op);
   }
 
   inline void wait() noexcept {
-    // TODO: readFF everything here.
+    // Wait for all the wrapped operation states.
+    apply_across([](auto &op) { op.wait(); }, internal_op_states.op);
   }
 };
 

@@ -486,11 +486,6 @@ struct when_all_op_state : immovable {
   //   the existing qthreads APIs before trying to guarantee separate
   //   cache lines here.
 
-  template <typename Receiver_>
-  when_all_op_state(Receiver_ &&r): receiver(std::forward<Receiver_>(r)) {
-    // TODO: connect all the wrapped senders to the inner receivers here.
-  }
-
   inline void start() noexcept {
     // TODO: start all the wrapped operation states here.
   }

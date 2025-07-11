@@ -254,9 +254,10 @@ struct when_all_item_receiver {
     op->template _set_error<Index>(static_cast<E &&>(e));
   }
 
-  __attribute__((always_inline)) void set_stopped() && noexcept {
-    op->set_stopped();
-  }
+  // Currently just disable set_stopped.
+  //__attribute__((always_inline)) void set_stopped() && noexcept {
+  //  op->set_stopped();
+  //}
 };
 
 template <typename Receiver, typename... Senders>

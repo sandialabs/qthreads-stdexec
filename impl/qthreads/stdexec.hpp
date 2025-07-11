@@ -323,6 +323,7 @@ struct when_all_op_state : immovable {
   // atomic counter are on separate cache lines?
   ret_tuple_type ret_tuple;
   std::atomic<std::size_t> completion_counter = sizeof...(Senders);
+  std::atomic<std::size_t> error_counter = 0uz;
   Receiver receiver;
   wrapped_senders_tuple_type wrapped_senders;
   internal_receiver_tuple_type internal_receivers;
@@ -349,6 +350,34 @@ struct when_all_op_state : immovable {
     if (!completion_counter.fetch_sub(1uz, std::memory_order_relaxed)) {
       std::apply([this](auto... args) { this->receiver.set_value(args...); },
                  ret_tuple);
+    }
+  }
+
+  template <std::size_t Index, typename E>
+  void _set_error(E &&err) noexcept {
+    // We don't currently support cancelling qthreads tasks mid-way
+    // through execution anyway, so the only concern here is which
+    // error to report.
+    // Unfortunately, the standard behavior for when_all is just to
+    // report one of the errors and discard the others instead of
+    // doing any kind of container exception type for forwarding
+    // information from multiple exceptions. We'll follow that
+    // convention for now, but it's reasonably within our power
+    // to do something better in our specialization someday later.
+    // TODO: gather all the exceptions into some kind of
+    // combined exception type instead of just forwarding
+    // the first one of them.
+    // Note: the default when_all behavior also seems to
+    // be to wait for everything to cancel or finish before
+    // forwarding the error too. Since qthreads are much cheaper
+    // than OS threads, it doesn't make sense to do that in our case.
+    // We can just call the outer receiver's set_error here
+    // and let whatever other work needs to happen start afterward.
+    // Note: we're not doing anything to completion_counter because
+    // we don't actually want some other completing thread to
+    // call set_value anymore.
+    if (!error_counter.fetch_add(1uz, std::memory_order_relaxed)) {
+      this->receiver.set_error(static_cast<E &&>(err));
     }
   }
 

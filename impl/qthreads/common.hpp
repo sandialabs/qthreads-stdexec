@@ -157,6 +157,34 @@ struct test_flatten_tuples {
   static_assert(std::is_same_v<ends, std::index_sequence<0uz, 3uz, 3uz, 4uz>>);
 };
 
+// check_matches_range: a utility function for checking
+// that a pack of types match a range of types in a tuple.
+template <typename T, std::size_t start, std::size_t end, typename... Args>
+struct check_matches_range;
+
+template <typename... T, std::size_t start>
+struct check_matches_range<std::tuple<T...>, start, start> {};
+
+template <typename... T,
+          std::size_t start,
+          std::size_t end,
+          typename Arg,
+          typename... Args>
+struct check_matches_range<std::tuple<T...>, start, end, Arg, Args...> {
+  static_assert(end - start == sizeof...(Args) + 1uz);
+  static_assert(std::is_same_v<T...[start], Arg>);
+  using recurse =
+    check_matches_range<std::tuple<T...>, start + 1uz, end, Args...>;
+};
+
+using test_check_matches_range =
+  check_matches_range<std::tuple<double, int, double, int>,
+                      1uz,
+                      4uz,
+                      int,
+                      double,
+                      int>;
+
 // indices_from_condition takes a condition and a pack of types and
 // generates an index sequence of the indices in the pack of types
 // that satisfy the condition.

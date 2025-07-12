@@ -185,6 +185,27 @@ using test_check_matches_range =
                       double,
                       int>;
 
+// assign_to_range assigns a pack of values to a
+// range of values within a given tuple.
+template <std::size_t Offset, typename Indices>
+struct assign_to_range_impl;
+
+template <std::size_t Offset, std::size_t... Ix>
+struct assign_to_range_impl<Offset, std::index_sequence<Ix...>> {
+  template <typename... Ts, typename... As>
+  void operator()(std::tuple<Ts...> &t, As &&...as) const noexcept {
+    static_assert(sizeof...(Ix) == sizeof...(As));
+    static_assert(Offset + sizeof...(Ix) <= sizeof...(Ts));
+    // Fold expression on comma operator
+    // to evaluate expression for each index in the pack.
+    ((std::get<Offset + Ix>(t) = std::forward<As...[Ix]>(as...[Ix])), ...);
+  }
+};
+
+template <std::size_t start, std::size_t stop>
+assign_to_range_impl<start, std::make_index_sequence<stop - start>>
+  assign_to_range;
+
 // indices_from_condition takes a condition and a pack of types and
 // generates an index sequence of the indices in the pack of types
 // that satisfy the condition.

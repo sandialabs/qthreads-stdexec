@@ -260,6 +260,33 @@ struct when_all_item_receiver {
   //}
 };
 
+// A simplified API for getting the return type associated with each sender.
+// stdexec::when_all has already confirmed that all the senders are from
+// the same domain, so we can assume that all the senders are some kind
+// of qthreads sender which means we know:
+// - they don't return multiple types, so variants aren't needed
+// - they return a single value in their call to set_value
+// - they use the qthreads_env
+// TODO: currently these are fine limitations,
+//   but what are the cases where they might not be true
+//   and how should they be handled here?
+// This still wraps the type in a tuple so that it'll work
+// for senders that don't actually return a value either.
+template <typename S>
+using ret_tuple_of_qthreads_sender =
+  stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>;
+
+// Get the wrapped return type for something that's known to
+// return something other than void.
+template <typename S>
+using ret_type_of_qthreads_sender =
+  std::tuple_element_t<0, ret_tuple_of_qthreads_sender<S>>;
+
+template <typename S>
+struct qthreads_sender_does_not_return_void {
+  bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
+};
+
 template <typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
   template <std::size_t I>
@@ -278,39 +305,13 @@ struct when_all_op_state : immovable {
   using internal_op_state_tuple_type = infer_tuple_types<
     std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
 
-  // A simplified API for getting the return type associated with each sender.
-  // stdexec::when_all has already confirmed that all the senders are from
-  // the same domain, so we can assume that all the senders are some kind
-  // of qthreads sender which means we know:
-  // - they don't return multiple types, so variants aren't needed
-  // - they return a single value in their call to set_value
-  // - they use the qthreads_env
-  // TODO: currently these are fine limitations,
-  //   but what are the cases where they might not be true
-  //   and how should they be handled here?
-  // This still wraps the type in a tuple so that it'll work
-  // for senders that don't actually return a value either.
-  template <typename S>
-  using ret_tuple_of_qthreads_sender =
-    stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>;
-
-  // Get the wrapped return type for something that's known to
-  // return something other than void.
-  template <typename S>
-  using ret_type_of_qthreads_sender =
-    std::tuple_element_t<0, ret_tuple_of_qthreads_sender<S>>;
-
-  template <typename S>
-  struct does_not_return_void {
-    bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
-  };
-
   // Indices mapping non-void output values to input senders.
   using non_void_value_indices =
-    indices_from_condition<does_not_return_void, Senders...>;
+    indices_from_condition<qthreads_sender_does_not_return_void, Senders...>;
   // Indices mapping input senders to non-void output values.
   using ret_value_reverse_indices =
-    reverse_indices_from_condition<does_not_return_void, Senders...>;
+    reverse_indices_from_condition<qthreads_sender_does_not_return_void,
+                                   Senders...>;
 
   using ret_tuple_type = apply_at_indices<ret_type_of_qthreads_sender,
                                           non_void_value_indices,
@@ -394,6 +395,7 @@ struct when_all_op_state : immovable {
   // so we don't currently need to handle the
   // multi-return-value case here.
   // TODO: what even is the expected behavior for when_all in that case?
+  // TODO!!!!! Fix the multiple-value return case.
   template <std::size_t Index, typename V>
   void _set_value(V &&val) noexcept {
     static constexpr std::size_t output_index =
@@ -442,10 +444,8 @@ struct when_all_op_state : immovable {
   }
 
   // Rough outline of what needs to happen:
-  //   - At init this inits all the wrapped operation states.
   //   - At connect, it connects an internal receiver to each
   //     wrapped sender.
-  //   - At start this starts all the wrapped operation states.
   //   - When set_value is called on one of the internal receivers it
   //     just stores the value in its entry in the tuple.
   //     Whichever one ends last should call (or somehow trigger the call to)
@@ -455,25 +455,8 @@ struct when_all_op_state : immovable {
   //     operation will complete first, there needs to be an atomic
   //     counter to determine which set_value call happens last
   //     so that the outer set_value call can happen.
-  //   - On wait, it waits all the operation states one after the other.
-  // TODO: a tuple of the operation state types from each sender
-  // TODO: a tuple of the return value from each sender.
-  //   WHAT ON EARTH happens if one of the wrapped senders has multiple possible
-  //   return values? Pretty sure that's a case we can (hopefully) ignore for
-  //   qthreads-based senders. Maybe? Note: the cuda example seems to want to
-  //   ALLOCATE the tuple for the return values!?!? It will likely be fine to
-  //   just store that tuple as a value in this struct instead? Note: The
-  //   existing when_all seems to return a... tuple of tuples of returns?
-  // TODO: a set of forwarding receivers that forward what they get out of
-  //   set_value into the final tuple returned by when_all.
-  //   Note: Since the tuple has to be indexed by compile-time indices,
-  //   the index needs to be a template parameter there too.
-  //   TODO: each of these things needs to have some kind of reference
-  //   to the outer receiver as well as the associated tuple of
-  //   return values and the atomic counter counting when to
-  //   call the outer set_value. What's the right idiom for this?
-  // TODO: Add a layer of indirection inside each tuple element
-  //   that ensures each entry has its own cache line.
+  //
+  // TODO: Do we want to ensure each entry has its own cache line?
   //   This is likely kind-of complicated so do this later.
   //   On the other hand, a whole cache line seems like total overkill
   //   for like... a couple ints or something. In theory we could end up
@@ -496,6 +479,42 @@ struct when_all_op_state : immovable {
     apply_across([](auto &op) { op.wait(); }, internal_op_states.op);
   }
 };
+
+/*template <stdexec::sender... S>
+struct qthreads_when_all_sender :
+  qthreads_base_sender<qthreads_then_sender<S, F>> {
+  std::tuple<S...> senders;
+
+  // TODO: Get the return types tuple out of the operation state type
+  // then use it to generate the completion signatures.
+
+  template <typename... As>
+  using set_value_t = then_completions<std::is_same_v<ret_t<As...>, void>>::
+    template completions<ret_t<As...>, As...>;
+
+  template <class Env>
+  using completions_t = stdexec::transform_completion_signatures_of<
+    S,
+    Env,
+    stdexec::completion_signatures<>,
+    set_value_t>;
+
+  template <class Env>
+  auto get_completion_signatures(Env &&) && -> completions_t<Env> {
+    return {};
+  }
+
+  template <stdexec::receiver R>
+    requires stdexec::sender_to<S, qthreads_then_receiver<R, F>>
+  auto connect(R r) && {
+    // No additional data needed in the operation state, so just
+    // connect the wrapped sender to the qthreads_then_receiver which
+    // actually wraps the provided function.
+    return stdexec::connect(
+      std::move(s),
+      qthreads_then_receiver<R, F>{static_cast<R &&>(r), static_cast<F &&>(f)});
+  }
+};*/
 
 // CRTP base class for various qthreads sender types.
 // This takes care of marking it as satisfying the

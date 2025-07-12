@@ -70,7 +70,7 @@ static_assert(
 // flatten_tuples takes a pack of tuple types and concatenates them
 // into a single tuple type.
 // Related, flatten_tuples_starts and
-// flatten_tuples_ends provide index sequences that
+// flatten_tuples_stops provide index sequences that
 // mark the beginning and (non-inclusive) end of the indices in
 // the final tuple provided by each tuple type of the input (Like CSR).
 // TODO: verify that the types are actually tuples.
@@ -85,7 +85,7 @@ struct flatten_tuples_impl<std::index_sequence<>,
                            std::tuple<>> {
   using type = std::tuple<>;
   using starts = std::index_sequence<>;
-  using ends = std::index_sequence<>;
+  using stops = std::index_sequence<>;
 };
 
 // Recursion base case
@@ -99,7 +99,7 @@ struct flatten_tuples_impl<std::index_sequence<Starts...>,
                            std::tuple<Next...>> {
   using type = std::tuple<Processed..., Next...>;
   using starts = std::index_sequence<Starts..., sizeof...(Processed)>;
-  using ends =
+  using stops =
     std::index_sequence<Ends..., sizeof...(Processed) + sizeof...(Next)>;
 };
 
@@ -121,7 +121,7 @@ struct flatten_tuples_impl<std::index_sequence<Starts...>,
     Others...>;
   using type = recurse::type;
   using starts = recurse::starts;
-  using ends = recurse::ends;
+  using stops = recurse::stops;
 };
 
 template <typename... Ts>
@@ -137,10 +137,10 @@ using flatten_tuples_starts = flatten_tuples_impl<std::index_sequence<>,
                                                   Ts...>::starts;
 
 template <typename... Ts>
-using flatten_tuples_ends = flatten_tuples_impl<std::index_sequence<>,
-                                                std::index_sequence<>,
-                                                std::tuple<>,
-                                                Ts...>::ends;
+using flatten_tuples_stops = flatten_tuples_impl<std::index_sequence<>,
+                                                 std::index_sequence<>,
+                                                 std::tuple<>,
+                                                 Ts...>::stops;
 
 // compile-time unit test for flatten_tuples functionality.
 struct test_flatten_tuples {
@@ -150,11 +150,11 @@ struct test_flatten_tuples {
   using t3 = std::tuple<float>;
   using flattened = flatten_tuples<t0, t1, t2, t3>;
   using starts = flatten_tuples_starts<t0, t1, t2, t3>;
-  using ends = flatten_tuples_ends<t0, t1, t2, t3>;
+  using stops = flatten_tuples_stops<t0, t1, t2, t3>;
   static_assert(std::is_same_v<flattened, std::tuple<int, int, int, float>>);
   static_assert(
     std::is_same_v<starts, std::index_sequence<0uz, 0uz, 3uz, 3uz>>);
-  static_assert(std::is_same_v<ends, std::index_sequence<0uz, 3uz, 3uz, 4uz>>);
+  static_assert(std::is_same_v<stops, std::index_sequence<0uz, 3uz, 3uz, 4uz>>);
 };
 
 // check_matches_range: a utility function for checking

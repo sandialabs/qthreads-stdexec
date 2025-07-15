@@ -460,42 +460,6 @@ struct when_all_op_state : immovable {
   }
 };
 
-/*template <stdexec::sender... S>
-struct qthreads_when_all_sender :
-  qthreads_base_sender<qthreads_then_sender<S, F>> {
-  std::tuple<S...> senders;
-
-  // TODO: Get the return types tuple out of the operation state type
-  // then use it to generate the completion signatures.
-
-  template <typename... As>
-  using set_value_t = then_completions<std::is_same_v<ret_t<As...>, void>>::
-    template completions<ret_t<As...>, As...>;
-
-  template <class Env>
-  using completions_t = stdexec::transform_completion_signatures_of<
-    S,
-    Env,
-    stdexec::completion_signatures<>,
-    set_value_t>;
-
-  template <class Env>
-  auto get_completion_signatures(Env &&) && -> completions_t<Env> {
-    return {};
-  }
-
-  template <stdexec::receiver R>
-    requires stdexec::sender_to<S, qthreads_then_receiver<R, F>>
-  auto connect(R r) && {
-    // No additional data needed in the operation state, so just
-    // connect the wrapped sender to the qthreads_then_receiver which
-    // actually wraps the provided function.
-    return stdexec::connect(
-      std::move(s),
-      qthreads_then_receiver<R, F>{static_cast<R &&>(r), static_cast<F &&>(f)});
-  }
-};*/
-
 // CRTP base class for various qthreads sender types.
 // This takes care of marking it as satisfying the
 // is_qthreads_sender concept (and the ordinary sender concept too).
@@ -781,10 +745,52 @@ struct completions<stdexec::__types<Env...>, Senders...> {
 };
 } // namespace when_all
 
-template <is_qthreads_sender... S>
+template <typename T>
+struct set_value_completions_from_tuple_impl;
+
+template <typename... T>
+struct set_value_completions_from_tuple_impl<std::tuple<T...>> {
+  using completions =
+    stdexec::completion_signatures<stdexec::set_value_t(T...),
+                                   stdexec::set_error_t(std::exception_ptr)>;
+};
+
+template <typename T>
+using set_value_completions_from_tuple =
+  set_value_completions_from_tuple_impl<T>::completions;
+
+template <stdexec::sender... S>
 struct qthreads_when_all_sender :
   qthreads_base_sender<qthreads_when_all_sender<S...>> {
-  //;
+  std::tuple<S...> senders;
+
+  qthreads_when_all_sender(S &&...s) noexcept:
+    senders(static_cast<S &&>(s)...) {}
+
+  using ret_tuples = std::tuple<ret_tuple_of_qthreads_sender<S>...>;
+  using ret_tuple_type = flatten_tuples<ret_tuples>;
+  using completion_signatures =
+    set_value_completions_from_tuple<ret_tuple_type>;
+
+  // Helper type to bundle a receiver into something we can use
+  // with std::apply to construct the operation state when connect is called.
+  template <typename R>
+  struct receiver_forward {
+    R r;
+
+    receiver_forward(R &&r_) noexcept: r(std::move(r_)) {}
+
+    auto operator()(S &&...s) && noexcept {
+      return when_all_op_state(std::move(r), std::move(s)...);
+    }
+  };
+
+  // TODO: require that the senders can actually send to the
+  // internal receiver type.
+  template <stdexec::receiver R>
+  auto connect(R &&r) && {
+    return std::apply(receiver_forward(std::move(r)), senders);
+  }
 };
 
 // Our transform_sender override calls into this for implementing stdexec::then.

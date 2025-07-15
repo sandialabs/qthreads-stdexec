@@ -157,6 +157,23 @@ struct test_flatten_tuples {
   static_assert(std::is_same_v<stops, std::index_sequence<0uz, 3uz, 3uz, 4uz>>);
 };
 
+template <typename T>
+struct flatten_nested_tuples_impl;
+
+template <typename... Ts>
+struct flatten_nested_tuples_impl<std::tuple<Ts...>> {
+  using type = flatten_tuples<std::decay_t<Ts>...>;
+  using starts = flatten_tuples_starts<std::decay_t<Ts>...>;
+  using stops = flatten_tuples_stops<std::decay_t<Ts>...>;
+};
+
+template <typename T>
+using flatten_nested_tuples = flatten_nested_tuples_impl<T>::type;
+template <typename T>
+using flatten_nested_tuples_starts = flatten_nested_tuples_impl<T>::starts;
+template <typename T>
+using flatten_nested_tuples_stops = flatten_nested_tuples_impl<T>::stops;
+
 // check_matches_range: a utility function for checking
 // that a pack of types match a range of types in a tuple.
 template <typename T, std::size_t start, std::size_t end, typename... Args>

@@ -240,6 +240,8 @@ struct when_all_op_state;
 
 template <typename outer_op_state_t, std::size_t Index>
 struct when_all_item_receiver {
+  using receiver_concept = stdexec::receiver_t;
+
   outer_op_state_t *op;
 
   qthreads_env get_env() const noexcept { return {}; }
@@ -789,7 +791,7 @@ struct qthreads_when_all_sender :
   // internal receiver type.
   template <stdexec::receiver R>
   auto connect(R &&r) && {
-    return std::apply(receiver_forward(std::move(r)), senders);
+    return consuming_apply(receiver_forward(std::move(r)), std::move(senders));
   }
 };
 

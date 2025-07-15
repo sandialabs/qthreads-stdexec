@@ -378,8 +378,8 @@ struct when_all_op_state : immovable {
   op_states_t<std::make_index_sequence<sizeof...(Senders)>> internal_op_states;
 
   when_all_op_state(Receiver &&r, Senders &&...senders) noexcept:
-    internal_op_states{static_cast<Senders &&>(senders)...},
-    receiver{std::move(r)} {
+    receiver{std::move(r)},
+    internal_op_states{static_cast<Senders &&>(senders)...} {
     completion_counter.store(sizeof...(Senders), std::memory_order_relaxed);
     error_counter.store(0uz, std::memory_order_relaxed);
   }

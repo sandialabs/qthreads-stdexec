@@ -67,6 +67,19 @@ static_assert(
                    std::declval<std::tuple<std::size_t, std::size_t>>())),
                  std::tuple<std::size_t, std::size_t>>);
 
+template <typename T>
+struct decay_rvalue_impl {
+  using type = T;
+};
+
+template <typename T>
+struct decay_rvalue_impl<T&&> {
+  using type = T;
+};
+
+template <typename T>
+using decay_rvalue = decay_rvalue_impl<T>::type;
+
 // flatten_tuples takes a pack of tuple types and concatenates them
 // into a single tuple type.
 // Related, flatten_tuples_starts and

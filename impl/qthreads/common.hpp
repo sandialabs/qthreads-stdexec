@@ -232,6 +232,22 @@ struct get_at_index_impl<std::index_sequence<Ixs...>, Ix> {
 template <typename T, std::size_t Ix>
 static constexpr std::size_t get_at_index = get_at_index_impl<T, Ix>::value;
 
+// consuming_apply: an equivalent of std::apply that moves from
+// each of the tuple elements.
+template <typename F, typename T, std::size_t... Ix>
+decltype(auto)
+consuming_apply_impl(F &&f, T &&t, std::index_sequence<Ix...>) noexcept {
+  return static_cast<F &&>(f)(std::move(std::get<Ix>(t))...);
+}
+
+template <typename F, typename T>
+decltype(auto) consuming_apply(F &&f, T &&t) noexcept {
+  return consuming_apply_impl(
+    static_cast<F &&>(f),
+    std::move(t),
+    std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+}
+
 } // namespace stdexx
 
 #endif // #ifndef QTHREADS_STDEXEC_COMMON_HPP

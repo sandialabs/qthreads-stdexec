@@ -813,12 +813,7 @@ struct transform_sender_for<stdexec::when_all_t> {
   template <typename... Senders>
   auto
   operator()(stdexec::__ignore, stdexec::__ignore, Senders &&...sndrs) const {
-    static_assert(false, "made it to correct customization.");
-    /*using __sender_t =
-      __t<when_all_sender_t<stdexec::when_all_t, stream_scheduler,
-    __id<__decay_t<Senders>>...>>; return __sender_t{ context_state_t{nullptr,
-    nullptr, nullptr, nullptr}, static_cast<Senders&&>(sndrs)...
-    };*/
+    return qthreads_when_all_sender(std::move(sndrs)...);
   }
 };
 

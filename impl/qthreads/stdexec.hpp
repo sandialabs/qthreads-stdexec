@@ -341,8 +341,9 @@ struct when_all_op_state : immovable {
   // Helper function used immediately below in the op_state tuple init.
   template <std::size_t I>
   decltype(auto) internal_receiver_gen(Senders &&...senders) noexcept {
-    return op_state_converter{when_all_item_receiver<decltype(*this), I>{this},
-                              std::move(senders...[I])};
+    return op_state_converter{
+      when_all_item_receiver<std::decay_t<decltype(*this)>, I>{this},
+      std::move(senders...[I])};
   }
 
   template <std::size_t... Ix>
@@ -350,8 +351,9 @@ struct when_all_op_state : immovable {
     internal_op_state_tuple_type tup;
 
     op_states_t(Senders &&...senders) noexcept:
-      tup{op_state_converter{when_all_item_receiver<decltype(*this), Ix>{this},
-                             std::move(senders...[Ix])}...} {}
+      tup{op_state_converter{
+        when_all_item_receiver<std::decay_t<decltype(*this)>, Ix>{this},
+        std::move(senders...[Ix])}...} {}
 
     template <std::size_t I>
     decltype(auto) get() noexcept {

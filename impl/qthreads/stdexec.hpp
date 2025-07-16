@@ -759,7 +759,7 @@ struct qthreads_when_all_sender :
     senders(static_cast<S &&>(s)...) {}
 
   using ret_tuples = std::tuple<ret_tuple_of_qthreads_sender<S>...>;
-  using ret_tuple_type = flatten_tuples<ret_tuples>;
+  using ret_tuple_type = flatten_nested_tuples<ret_tuples>;
   using completion_signatures =
     set_value_completions_from_tuple<ret_tuple_type>;
 

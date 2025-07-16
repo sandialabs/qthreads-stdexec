@@ -285,9 +285,10 @@ struct qthreads_sender_does_not_return_void {
 
 template <typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
+  // just a shorthand for referring to this type.
+  using os_t = when_all_op_state<Receiver, Senders...>;
   template <std::size_t I>
-  using item_receiver =
-    when_all_item_receiver<when_all_op_state<Receiver, Senders...>, I>;
+  using item_receiver = when_all_item_receiver<os_t, I>;
   template <typename T>
     requires is_index_sequence<T>
   struct infer_tuple_types;
@@ -323,7 +324,7 @@ struct when_all_op_state : immovable {
     // Guaranteed copy elision here allows constructing
     // the operation state in-place when initializing a tuple
     // of operation states.
-    operator op_state() && {
+    operator op_state() && noexcept {
       return stdexec::connect(std::move(std::get<0>(args)),
                               std::move(std::get<1>(args)));
     }
@@ -342,10 +343,9 @@ struct when_all_op_state : immovable {
   struct op_states_t<std::index_sequence<Ix...>> {
     internal_op_state_tuple_type tup;
 
-    op_states_t(Senders &&...senders) noexcept:
-      tup{op_state_converter{
-        std::move(senders...[Ix]),
-        when_all_item_receiver<std::decay_t<decltype(*this)>, Ix>{this}}...} {}
+    op_states_t(os_t *os, Senders &&...senders) noexcept:
+      tup(op_state_converter{std::move(senders...[Ix]),
+                             when_all_item_receiver<os_t, Ix>{os}}...) {}
 
     template <std::size_t I>
     decltype(auto) get() noexcept {
@@ -368,7 +368,7 @@ struct when_all_op_state : immovable {
 
   when_all_op_state(Receiver &&r, Senders &&...senders) noexcept:
     receiver{std::move(r)},
-    internal_op_states{static_cast<Senders &&>(senders)...} {
+    internal_op_states{this, static_cast<Senders &&>(senders)...} {
     completion_counter.store(sizeof...(Senders), std::memory_order_relaxed);
     error_counter.store(0uz, std::memory_order_relaxed);
   }
@@ -442,12 +442,12 @@ struct when_all_op_state : immovable {
 
   inline void start() noexcept {
     // Start all the wrapped operation states.
-    apply_across(stdexec::start, internal_op_states.op);
+    apply_across(stdexec::start, internal_op_states.tup);
   }
 
   inline void wait() noexcept {
     // Wait for all the wrapped operation states.
-    apply_across([](auto &op) { op.wait(); }, internal_op_states.op);
+    apply_across([](auto &op) { op.wait(); }, internal_op_states.tup);
   }
 };
 

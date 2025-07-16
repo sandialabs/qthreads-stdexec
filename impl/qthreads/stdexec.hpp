@@ -262,7 +262,7 @@ struct when_all_item_receiver {
   //}
 };
 
-// A simplified API for getting the return type associated with each sender.
+// A simplified API for getting the return types associated with each sender.
 // stdexec::when_all has already confirmed that all the senders are from
 // the same domain, so we can assume that all the senders are some kind
 // of qthreads sender which means we know:
@@ -274,14 +274,9 @@ struct when_all_item_receiver {
 // This still wraps the type in a tuple so that it'll work
 // for senders that don't actually return a value either.
 template <typename S>
-using ret_tuple_of_qthreads_sender =
-  stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>;
-
-// Get the wrapped return type for something that's known to
-// return something other than void.
-template <typename S>
-using ret_type_of_qthreads_sender =
-  std::tuple_element_t<0, ret_tuple_of_qthreads_sender<S>>;
+using ret_tuple_of_qthreads_sender = decltype(std::get<0>(
+  std::declval<
+    stdexec::value_types_of_t<S, qthreads_env, std::tuple, std::variant>>()));
 
 template <typename S>
 struct qthreads_sender_does_not_return_void {
@@ -307,9 +302,9 @@ struct when_all_op_state : immovable {
     std::make_index_sequence<sizeof...(Senders)>>::os_tuple_type_impl;
 
   using ret_tuples = std::tuple<ret_tuple_of_qthreads_sender<Senders>...>;
-  using ret_tuple_type = flatten_tuples<ret_tuples>;
-  using ret_tuple_starts = flatten_tuples_starts<ret_tuples>;
-  using ret_tuple_stops = flatten_tuples_stops<ret_tuples>;
+  using ret_tuple_type = flatten_nested_tuples<ret_tuples>;
+  using ret_tuple_starts = flatten_nested_tuples_starts<ret_tuples>;
+  using ret_tuple_stops = flatten_nested_tuples_stops<ret_tuples>;
 
   // Trick to initialize immovable operation states in-place inside
   // our tuple of inner operation states.

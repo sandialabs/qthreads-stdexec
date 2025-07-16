@@ -442,12 +442,12 @@ struct when_all_op_state : immovable {
 
   inline void start() noexcept {
     // Start all the wrapped operation states.
-    apply_across(stdexec::start, internal_op_states.tup);
+    run_across(stdexec::start, internal_op_states.tup);
   }
 
   inline void wait() noexcept {
     // Wait for all the wrapped operation states.
-    apply_across([](auto &op) { op.wait(); }, internal_op_states.tup);
+    run_across([](auto &op) { op.wait(); }, internal_op_states.tup);
   }
 };
 

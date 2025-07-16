@@ -318,7 +318,7 @@ struct when_all_op_state : immovable {
       args{static_cast<S &&>(s), static_cast<R &&>(r)} {}
 
     using op_state =
-      decltype(stdexec::connect(std::declval<S>(), std::declval<R>()));
+      decltype(stdexec::connect(std::declval<S &&>(), std::declval<R &&>()));
 
     // Guaranteed copy elision here allows constructing
     // the operation state in-place when initializing a tuple
@@ -338,22 +338,14 @@ struct when_all_op_state : immovable {
   template <typename>
   struct op_states_t;
 
-  // Helper function used immediately below in the op_state tuple init.
-  template <std::size_t I>
-  decltype(auto) internal_receiver_gen(Senders &&...senders) noexcept {
-    return op_state_converter{
-      when_all_item_receiver<std::decay_t<decltype(*this)>, I>{this},
-      std::move(senders...[I])};
-  }
-
   template <std::size_t... Ix>
   struct op_states_t<std::index_sequence<Ix...>> {
     internal_op_state_tuple_type tup;
 
     op_states_t(Senders &&...senders) noexcept:
       tup{op_state_converter{
-        when_all_item_receiver<std::decay_t<decltype(*this)>, Ix>{this},
-        std::move(senders...[Ix])}...} {}
+        std::move(senders...[Ix]),
+        when_all_item_receiver<std::decay_t<decltype(*this)>, Ix>{this}}...} {}
 
     template <std::size_t I>
     decltype(auto) get() noexcept {

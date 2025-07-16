@@ -131,11 +131,11 @@ struct qt_os_base : immovable {
   qt_os_base(Receiver_ &&r): feb(0u), receiver(std::forward<Receiver_>(r)) {}
 
   inline void start() noexcept {
-    auto st = stdexec::get_stop_token(stdexec::get_env(receiver));
+    /*auto st = stdexec::get_stop_token(stdexec::get_env(receiver));
     if (st.stop_requested()) {
       stdexec::set_stopped(std::move(receiver));
       return;
-    }
+    }*/
     int r = qthread_fork(&Derived_Op_State::task, this, &feb);
 
     if (r != QTHREAD_SUCCESS) {

@@ -446,6 +446,10 @@ struct when_all_op_state : immovable {
   }
 
   inline void wait() noexcept {
+    // TODO: for perf, can we somehow call set_value after waiting here?
+    // Maybe have the first qthread wait on the others or something?
+    // That way we wouldn't have the overhead of the atomic counter
+    // before calling set_value.
     // Wait for all the wrapped operation states.
     run_across([](auto &op) { op.wait(); }, internal_op_states.tup);
   }

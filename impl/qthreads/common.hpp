@@ -73,7 +73,7 @@ struct decay_rvalue_impl {
 };
 
 template <typename T>
-struct decay_rvalue_impl<T&&> {
+struct decay_rvalue_impl<T &&> {
   using type = T;
 };
 
@@ -81,7 +81,7 @@ template <typename T>
 using decay_rvalue = decay_rvalue_impl<T>::type;
 
 // flatten_tuples takes a pack of tuple types and concatenates them
-// into a single tuple type.
+// into a single tuple type. Also strips rvalue qualifiers.
 // Related, flatten_tuples_starts and
 // flatten_tuples_stops provide index sequences that
 // mark the beginning and (non-inclusive) end of the indices in
@@ -110,7 +110,7 @@ struct flatten_tuples_impl<std::index_sequence<Starts...>,
                            std::index_sequence<Ends...>,
                            std::tuple<Processed...>,
                            std::tuple<Next...>> {
-  using type = std::tuple<Processed..., Next...>;
+  using type = std::tuple<Processed..., decay_rvalue<Next>...>;
   using starts = std::index_sequence<Starts..., sizeof...(Processed)>;
   using stops =
     std::index_sequence<Ends..., sizeof...(Processed) + sizeof...(Next)>;
@@ -130,7 +130,7 @@ struct flatten_tuples_impl<std::index_sequence<Starts...>,
   using recurse = flatten_tuples_impl<
     std::index_sequence<Starts..., sizeof...(Processed)>,
     std::index_sequence<Ends..., sizeof...(Processed) + sizeof...(Next)>,
-    std::tuple<Processed..., Next...>,
+    std::tuple<Processed..., decay_rvalue<Next>...>,
     Others...>;
   using type = recurse::type;
   using starts = recurse::starts;

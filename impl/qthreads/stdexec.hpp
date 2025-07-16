@@ -380,7 +380,7 @@ struct when_all_op_state : immovable {
     static constexpr std::size_t stop = get_at_index<ret_tuple_stops, Index>;
     // TODO: Use the utility function to assert that the val types match.
     assign_to_range<start, stop>(ret_tuple, static_cast<V &&>(val)...);
-    if (!completion_counter.fetch_sub(1uz, std::memory_order_relaxed)) {
+    if (completion_counter.fetch_sub(1uz, std::memory_order_relaxed) == 1uz) {
       std::apply([this](auto... args) { this->receiver.set_value(args...); },
                  ret_tuple);
     }

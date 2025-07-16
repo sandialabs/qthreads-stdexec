@@ -51,8 +51,9 @@ decltype(auto) apply_across(Func &&func, Args &&...args) {
   static_assert(sizeof...(Args),
                 "Ambiguous return size for tuple. At least one argument to map "
                 "onto is required.");
-  constexpr std::size_t tuple_size = std::tuple_size_v<Args...[0]>;
-  static_assert(((tuple_size == std::tuple_size_v<Args>) && ...),
+  constexpr std::size_t tuple_size =
+    std::tuple_size_v<std::decay_t<Args...[0]>>;
+  static_assert(((tuple_size == std::tuple_size_v<std::decay_t<Args>>) && ...),
                 "Tuple-likes to be mapped onto must all be the same size.");
   return apply_across_impl(std::make_index_sequence<tuple_size>(),
                            static_cast<Func &&>(func),

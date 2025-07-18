@@ -235,7 +235,7 @@ struct basic_func_operation_state :
   }
 };
 
-template <typename Receiver, typename... Senders>
+template <bool needs_continuation, typename Receiver, typename... Senders>
 struct when_all_op_state;
 
 template <typename outer_op_state_t, std::size_t Index>
@@ -283,10 +283,33 @@ struct qthreads_sender_does_not_return_void {
   bool value = !std::is_same_v<ret_tuple_of_qthreads_sender<S>, std::tuple<>>;
 };
 
-template <typename Receiver, typename... Senders>
+template <bool skip = false>
+struct completion_counter;
+
+template <>
+struct completion_counter<true> {
+  void set(std::size_t count) noexcept {}
+
+  bool check_finished() noexcept { return false; }
+};
+
+template <>
+struct completion_counter<false> {
+  std::atomic<std::size_t> counter;
+
+  void set(std::size_t count) noexcept {
+    counter.store(count, std::memory_order_relaxed);
+  }
+
+  bool check_finished() noexcept {
+    return 1uz == counter.fetch_sub(1uz, std::memory_order_relaxed);
+  }
+};
+
+template <bool needs_continuation, typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
   // just a shorthand for referring to this type.
-  using os_t = when_all_op_state<Receiver, Senders...>;
+  using os_t = when_all_op_state<needs_continuation, Receiver, Senders...>;
   template <std::size_t I>
   using item_receiver = when_all_item_receiver<os_t, I>;
   template <typename T>
@@ -359,7 +382,7 @@ struct when_all_op_state : immovable {
   // trivially initializable and movable. Its not clear if there
   // are ways to relax those constraints much.
   ret_tuple_type ret_tuple;
-  std::atomic<std::size_t> completion_counter;
+  completion_counter<!needs_continuation> completion;
   std::atomic<std::size_t> error_counter;
   Receiver receiver;
   // Need an extra layer of indirection here to be able
@@ -369,8 +392,13 @@ struct when_all_op_state : immovable {
   when_all_op_state(Receiver &&r, Senders &&...senders) noexcept:
     receiver{std::move(r)},
     internal_op_states{this, static_cast<Senders &&>(senders)...} {
-    completion_counter.store(sizeof...(Senders), std::memory_order_relaxed);
+    completion.set(sizeof...(Senders));
     error_counter.store(0uz, std::memory_order_relaxed);
+  }
+
+  void set_value_on_outer_receiver() noexcept {
+    std::apply([this](auto... args) { this->receiver.set_value(args...); },
+               ret_tuple);
   }
 
   // Called by the wrapped receivers' set_value
@@ -380,9 +408,8 @@ struct when_all_op_state : immovable {
     static constexpr std::size_t stop = get_at_index<ret_tuple_stops, Index>;
     // TODO: Use the utility function to assert that the val types match.
     assign_to_range<start, stop>(ret_tuple, static_cast<V &&>(val)...);
-    if (completion_counter.fetch_sub(1uz, std::memory_order_relaxed) == 1uz) {
-      std::apply([this](auto... args) { this->receiver.set_value(args...); },
-                 ret_tuple);
+    if constexpr (needs_continuation) {
+      if (completion.check_finished()) { set_value_on_outer_receiver(); }
     }
   }
 
@@ -406,7 +433,7 @@ struct when_all_op_state : immovable {
     // than OS threads, it doesn't make sense to do that in our case.
     // We can just call the outer receiver's set_error here
     // and let whatever other work needs to happen start afterward.
-    // Note: we're not doing anything to completion_counter because
+    // Note: we're not doing anything to the completion counter because
     // we don't actually want some other completing thread to
     // call set_value anymore.
     if (!error_counter.fetch_add(1uz, std::memory_order_relaxed)) {
@@ -452,6 +479,7 @@ struct when_all_op_state : immovable {
     // before calling set_value.
     // Wait for all the wrapped operation states.
     run_across([](auto &op) { op.wait(); }, internal_op_states.tup);
+    if constexpr (!needs_continuation) { set_value_on_outer_receiver(); }
   }
 };
 
@@ -767,6 +795,17 @@ struct qthreads_when_all_sender :
   using completion_signatures =
     set_value_completions_from_tuple<ret_tuple_type>;
 
+  // If when_all connects directly to sync_wait, there's actually no need to
+  // provide an execution agent to continue running. This lets us
+  // avoid even using an atomic counter for completion inside the
+  // various when_all completions. We can instead just wait for those
+  // qthreads to complete and then call the associated set_value
+  // for the receiver inside the operation state's wait routine instead.
+  template <typename R>
+  static constexpr bool is_sync_wait_receiver = std::is_same_v<
+    R,
+    stdexec::__sync_wait::__receiver_t<qthreads_when_all_sender<S...>>>;
+
   // Helper type to bundle a receiver into something we can use
   // with std::apply to construct the operation state when connect is called.
   template <typename R>
@@ -776,7 +815,8 @@ struct qthreads_when_all_sender :
     receiver_forward(R &&r_) noexcept: r(std::move(r_)) {}
 
     auto operator()(S &&...s) && noexcept {
-      return when_all_op_state(std::move(r), std::move(s)...);
+      return when_all_op_state<!is_sync_wait_receiver<R>, R, S...>(
+        std::move(r), std::move(s)...);
     }
   };
 

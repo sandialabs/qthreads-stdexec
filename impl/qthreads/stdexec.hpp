@@ -476,7 +476,7 @@ struct qthreads_base_sender {
 struct qthreads_sender : qthreads_base_sender<qthreads_sender> {
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(),
-                                   stdexec::set_stopped_t(),
+                                   // stdexec::set_stopped_t(),
                                    stdexec::set_error_t(int)>;
 
   template <typename Receiver>
@@ -496,7 +496,7 @@ struct qthreads_just_sender : qthreads_base_sender<qthreads_just_sender<Val>> {
 
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(Val &&),
-                                   stdexec::set_stopped_t(),
+                                   // stdexec::set_stopped_t(),
                                    stdexec::set_error_t(int)>;
 
   template <typename Receiver>
@@ -518,7 +518,7 @@ struct qthreads_basic_func_sender :
 
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(aligned_t),
-                                   stdexec::set_stopped_t(),
+                                   // stdexec::set_stopped_t(),
                                    stdexec::set_error_t(int)>;
 
   template <typename Receiver>
@@ -541,7 +541,7 @@ struct qthreads_func_sender :
 
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(aligned_t),
-                                   stdexec::set_stopped_t(),
+                                   // stdexec::set_stopped_t(),
                                    stdexec::set_error_t(int)>;
 
   template <typename Receiver>

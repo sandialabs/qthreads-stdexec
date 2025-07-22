@@ -1,6 +1,9 @@
 #ifndef QTHREADS_STDEXEC_COMMON_HPP
 #define QTHREADS_STDEXEC_COMMON_HPP
 
+#include <string_view>
+#include <type_traits>
+
 // General C++ utilities needed by the qthreads stdexec wrapper code.
 
 namespace stdexx {
@@ -269,6 +272,29 @@ decltype(auto) consuming_apply(F &&f, T &&t) noexcept {
     static_cast<F &&>(f),
     std::move(t),
     std::make_index_sequence<std::tuple_size_v<std::decay_t<T>>>());
+}
+
+// Trickery to get the name of a type as a printable string.
+// Useful for debugging. See https://stackoverflow.com/a/56766138
+template <typename T>
+constexpr auto type_as_str() {
+  std::string_view name, prefix, suffix;
+#ifdef __clang__
+  name = __PRETTY_FUNCTION__;
+  prefix = "auto stdexx::type_as_str() [T = ";
+  suffix = "]";
+#elif defined(__GNUC__)
+  name = __PRETTY_FUNCTION__;
+  prefix = "constexpr auto stdexx::type_as_str() [with T = ";
+  suffix = "]";
+#elif defined(_MSC_VER)
+  name = __FUNCSIG__;
+  prefix = "auto __cdecl stdexx::type_as_str<";
+  suffix = ">(void)";
+#endif
+  name.remove_prefix(prefix.size());
+  name.remove_suffix(suffix.size());
+  return name;
 }
 
 } // namespace stdexx

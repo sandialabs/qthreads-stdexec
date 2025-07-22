@@ -397,8 +397,11 @@ struct when_all_op_state : immovable {
   }
 
   void set_value_on_outer_receiver() noexcept {
-    std::apply([this](auto... args) { this->receiver.set_value(args...); },
-               ret_tuple);
+    consuming_apply(
+      [this](auto... args) {
+        stdexec::set_value(std::move(this->receiver), args...);
+      },
+      ret_tuple);
   }
 
   // Called by the wrapped receivers' set_value
@@ -437,7 +440,7 @@ struct when_all_op_state : immovable {
     // we don't actually want some other completing thread to
     // call set_value anymore.
     if (!error_counter.fetch_add(1uz, std::memory_order_relaxed)) {
-      this->receiver.set_error(static_cast<E &&>(err));
+      stdexec::set_error(std::move(this->receiver), static_cast<E &&>(err));
     }
   }
 
@@ -503,9 +506,7 @@ struct qthreads_base_sender {
 // start a chain of tasks on the qthreads_scheduler.
 struct qthreads_sender : qthreads_base_sender<qthreads_sender> {
   using completion_signatures =
-    stdexec::completion_signatures<stdexec::set_value_t(),
-                                   // stdexec::set_stopped_t(),
-                                   stdexec::set_error_t(int)>;
+    stdexec::completion_signatures<stdexec::set_value_t()>;
 
   template <typename Receiver>
   operation_state<Receiver> connect(Receiver &&receiver) && {
@@ -523,9 +524,7 @@ struct qthreads_just_sender : qthreads_base_sender<qthreads_just_sender<Val>> {
   qthreads_just_sender(Val &&v) noexcept: val(v) {}
 
   using completion_signatures =
-    stdexec::completion_signatures<stdexec::set_value_t(Val &&),
-                                   // stdexec::set_stopped_t(),
-                                   stdexec::set_error_t(int)>;
+    stdexec::completion_signatures<stdexec::set_value_t(Val)>;
 
   template <typename Receiver>
   static just_operation_state<Val, Receiver> connect(qthreads_just_sender &&s,
@@ -545,9 +544,7 @@ struct qthreads_basic_func_sender :
   qthreads_basic_func_sender(Func &&f) noexcept: func(f) {}
 
   using completion_signatures =
-    stdexec::completion_signatures<stdexec::set_value_t(aligned_t),
-                                   // stdexec::set_stopped_t(),
-                                   stdexec::set_error_t(int)>;
+    stdexec::completion_signatures<stdexec::set_value_t(aligned_t)>;
 
   template <typename Receiver>
   static basic_func_operation_state<Func, Receiver>
@@ -568,9 +565,7 @@ struct qthreads_func_sender :
   qthreads_func_sender(Func f, Arg a) noexcept: func(f), arg(a) {}
 
   using completion_signatures =
-    stdexec::completion_signatures<stdexec::set_value_t(aligned_t),
-                                   // stdexec::set_stopped_t(),
-                                   stdexec::set_error_t(int)>;
+    stdexec::completion_signatures<stdexec::set_value_t(aligned_t)>;
 
   template <typename Receiver>
   static func_operation_state<Func, Arg, Receiver>
@@ -658,8 +653,12 @@ public:
   // inner receiver
   template <class... As>
     requires stdexec::receiver_of<R, _completions<As...>>
-  void set_value(As &&...as) && noexcept {
+  void set_value(As... as) && noexcept {
     try {
+      // For some reason at O2 level or higher with clang, the function pointer
+      // sometimes gets optimized out here, resulting in a segfault when the
+      // call to f occurs. For now, don't use then to wait on a when_all.
+      // TODO: debug this weirdness.
       set_value_impl<std::is_same_v<ret_t<As...>, void>>::impl(
         std::move(*this).base(), std::move(f), static_cast<As &&>(as)...);
     } catch (...) {
@@ -674,6 +673,8 @@ template <stdexec::sender S, typename F>
 struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
   S s;
   F f;
+  static_assert(std::is_same_v<F, std::decay_t<F>>);
+  static_assert(std::is_same_v<S, std::decay_t<S>>);
 
   template <typename... Args>
   using ret_t = std::invoke_result_t<F, Args...>;
@@ -696,13 +697,13 @@ struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
 
   template <stdexec::receiver R>
     requires stdexec::sender_to<S, qthreads_then_receiver<R, F>>
-  auto connect(R r) && {
+  auto connect(R &&r) && {
     // No additional data needed in the operation state, so just
     // connect the wrapped sender to the qthreads_then_receiver which
     // actually wraps the provided function.
     return stdexec::connect(
       std::move(s),
-      qthreads_then_receiver<R, F>{static_cast<R &&>(r), static_cast<F &&>(f)});
+      qthreads_then_receiver<R, F>{static_cast<R &&>(r), std::move(f)});
   }
 };
 
@@ -833,7 +834,7 @@ template <>
 struct transform_sender_for<stdexec::then_t> {
   template <class Fn, class Sender>
     requires is_qthreads_sender<Sender>
-  auto operator()(stdexec::__ignore, Fn fun, Sender &&sndr) const {
+  auto operator()(stdexec::__ignore, Fn &&fun, Sender &&sndr) const {
     // fun is already the invocable we want to wrap.
     // It's already been extracted from inside the default "then".
     // All we need to do here is construct the associated sender from it.

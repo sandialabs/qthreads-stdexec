@@ -247,8 +247,8 @@ struct when_all_item_receiver {
   qthreads_env get_env() const noexcept { return {}; }
 
   template <typename... V>
-  __attribute__((always_inline)) void set_value(V &&...vals) && noexcept {
-    op->template _set_value<Index>(static_cast<V &&>(vals)...);
+  __attribute__((always_inline)) void set_value(V... vals) && noexcept {
+    op->template _set_value<Index>(vals...);
   }
 
   template <typename E>
@@ -406,11 +406,11 @@ struct when_all_op_state : immovable {
 
   // Called by the wrapped receivers' set_value
   template <std::size_t Index, typename... V>
-  void _set_value(V &&...val) noexcept {
+  void _set_value(V... val) noexcept {
     static constexpr std::size_t start = get_at_index<ret_tuple_starts, Index>;
     static constexpr std::size_t stop = get_at_index<ret_tuple_stops, Index>;
     // TODO: Use the utility function to assert that the val types match.
-    assign_to_range<start, stop>(ret_tuple, static_cast<V &&>(val)...);
+    assign_to_range<start, stop>(ret_tuple, val...);
     if constexpr (needs_continuation) {
       if (completion.check_finished()) { set_value_on_outer_receiver(); }
     }
@@ -654,6 +654,8 @@ public:
   template <class... As>
     requires stdexec::receiver_of<R, _completions<As...>>
   void set_value(As... as) && noexcept {
+    // TODO: move the try/catch inside set_value_impl since, in the error case,
+    // we could end up calling set_error on a receiver that's been moved.
     try {
       // For some reason at O2 level or higher with clang, the function pointer
       // sometimes gets optimized out here, resulting in a segfault when the

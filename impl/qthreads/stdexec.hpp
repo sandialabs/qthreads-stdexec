@@ -521,7 +521,7 @@ template <typename Val>
 struct qthreads_just_sender : qthreads_base_sender<qthreads_just_sender<Val>> {
   Val val;
 
-  qthreads_just_sender(Val &&v) noexcept: val(v) {}
+  qthreads_just_sender(Val v) noexcept: val(v) {}
 
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(Val)>;

@@ -2,9 +2,13 @@
 
 #include <stdexx.hpp>
 
+// This was a reproducing example for a memory corruption bug
+// that was happening earlier. We've worked around it now, but
+// the fix isn't particularly enlightening. I'm leaving this
+// here as a test that can be used for further investigation.
+
 int main() {
   stdexx::init();
-  // TODO: there's a memory corruption bug here. Fix it.
   auto [r] = stdexec::sync_wait(
                stdexec::when_all(stdexx::qthreads_just_sender(1uz) |
                                    stdexec::then([](auto a) { return a; }),

@@ -523,6 +523,14 @@ struct qthreads_just_sender : qthreads_base_sender<qthreads_just_sender<Val>> {
 
   qthreads_just_sender(Val v) noexcept: val(v) {}
 
+  // TODO: for some reason we get a segfault if this is defaulted even though
+  // in theory the implementation is the same as what the default would do.
+  // See the when_all_segfault example for how to reproduce this.
+  qthreads_just_sender(qthreads_just_sender &&other) noexcept:
+    val(std::move(other.val)) {}
+
+  // qthreads_just_sender(qthreads_just_sender &&) = default;
+
   using completion_signatures =
     stdexec::completion_signatures<stdexec::set_value_t(Val)>;
 

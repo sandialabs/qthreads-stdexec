@@ -3,8 +3,81 @@
 
 #include <stdexx.hpp>
 
+#define DEPTH 10uz
+
+static int validation[] = {
+  0,        // 0
+  1,        // 1
+  1,        // 2
+  2,        // 3
+  3,        // 4
+  5,        // 5
+  8,        // 6
+  13,       // 7
+  21,       // 8
+  34,       // 9
+  55,       // 10
+  89,       // 11
+  144,      // 12
+  233,      // 13
+  377,      // 14
+  610,      // 15
+  987,      // 16
+  1597,     // 17
+  2584,     // 18
+  4181,     // 19
+  6765,     // 20
+  10946,    // 21
+  17711,    // 22
+  28657,    // 23
+  46368,    // 24
+  75025,    // 25
+  121393,   // 26
+  196418,   // 27
+  317811,   // 28
+  514229,   // 29
+  832040,   // 30
+  1346269,  // 31
+  2178309,  // 32
+  3524578,  // 33
+  5702887,  // 34
+  9227465,  // 35
+  14930352, // 36
+  24157817, // 37
+  39088169  // 38
+};
+
+static_assert(DEPTH <= 38 && DEPTH >= 0, "Select valid DEPTH.");
+
 #if (STDEXX_QTHREADS)
 
+#if (FIB_USE_QTHREADS_EXPLICITLY)
+static aligned_t fib(void *arg_) {
+  unsigned int n = *(unsigned int *)arg_;
+
+  if (n < 2) { return n; }
+
+  aligned_t ret1 = 0;
+  aligned_t ret2 = 0;
+  unsigned int n1 = n - 1;
+  unsigned int n2 = n - 2;
+
+  qthread_fork(fib, &n1, &ret1);
+  qthread_fork(fib, &n2, &ret2);
+
+  qthread_readFF(NULL, &ret1);
+  qthread_readFF(NULL, &ret2);
+
+  return ret1 + ret2;
+}
+
+auto main() -> int {
+  qthread_initialize();
+  int r = fib(DEPTH);      
+  if(r != validation[DEPTH]) std::cout << "Failed." << std::endl;
+  qthread_finalize();
+}
+#else //FIB_USE_QTHREADS_EXPLICITLY
 aligned_t fib(size_t n) {
   if (n < 2uz) return n;
   stdexec::sender auto s1 =
@@ -19,14 +92,31 @@ aligned_t fib(size_t n) {
 auto main() -> int {
   stdexx::init();
   auto [r] =
-    stdexec::sync_wait(stdexx::qthreads_just_sender(10uz) | stdexec::then(&fib))
+    stdexec::sync_wait(stdexx::qthreads_just_sender(DEPTH) | stdexec::then(&fib))
       .value();
-  std::cout << r << std::endl;
+  if(r != validation[DEPTH]) std::cout << "Failed." << std::endl;
   stdexx::finalize();
 }
-
+#endif
 #elif (STDEXX_REFERENCE)
-auto main() -> int {}
+int fib(size_t n) {
+  if (n < 2uz) return n;
+  stdexec::sender auto s1 =
+    stdexec::just(n - 1uz) | stdexec::then(&fib);
+  stdexec::sender auto s2 =
+    stdexec::just(n - 2uz) | stdexec::then(&fib);
+  auto [r1, r2] =
+    stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
+  return r1 + r2;
+}
+
+auto main() -> int {
+  auto [r] =
+    stdexec::sync_wait(stdexec::just(DEPTH) | stdexec::then(&fib))
+      .value();
+  if(r != validation[DEPTH]) std::cout << "Failed." << std::endl;
+}
+
 #else
 error "Not implemented."
 #endif

@@ -8,7 +8,7 @@ using namespace std::chrono;
 
 #define DEPTH 10uz
 
-static int validation[] = {
+static unsigned int validation[] = {
   0,        // 0
   1,        // 1
   1,        // 2
@@ -76,7 +76,7 @@ static aligned_t fib(void *arg_) {
 
 auto main(int argc, char *argv[]) -> int {
   int depth = DEPTH;
-  depth = argc == 2 ? argv[1] : depth;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
   assert(depth < 38);
 
   qthread_initialize();
@@ -111,7 +111,7 @@ aligned_t fib(size_t n) {
 
 auto main(int argc, char *argv[]) -> int {
   int depth = DEPTH;
-  depth = argc == 2 ? argv[1] : depth;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
   assert(depth < 38);
 
   stdexx::init();

@@ -2,6 +2,7 @@
 
 #include <stdexx.hpp>
 
+#if (STDEXX_QTHREADS)
 // This was a reproducing example for a memory corruption bug
 // that was happening earlier. We've worked around it now, but
 // the fix isn't particularly enlightening. I'm leaving this
@@ -18,3 +19,8 @@ int main() {
   std::cout << r << std::endl;
   stdexx::finalize();
 }
+#elif (STDEXX_REFERENCE)
+auto main() -> int {}
+#else
+error "Not implemented."
+#endif

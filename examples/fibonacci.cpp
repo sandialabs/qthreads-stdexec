@@ -3,6 +3,8 @@
 
 #include <stdexx.hpp>
 
+#if (STDEXX_QTHREADS)
+
 aligned_t fib(size_t n) {
   if (n < 2uz) return n;
   stdexec::sender auto s1 =
@@ -14,7 +16,7 @@ aligned_t fib(size_t n) {
   return r1 + r2;
 }
 
-int main() {
+auto main() -> int {
   stdexx::init();
   auto [r] =
     stdexec::sync_wait(stdexx::qthreads_just_sender(10uz) | stdexec::then(&fib))
@@ -22,3 +24,9 @@ int main() {
   std::cout << r << std::endl;
   stdexx::finalize();
 }
+
+#elif (STDEXX_REFERENCE)
+auto main() -> int {}
+#else
+error "Not implemented."
+#endif

@@ -10,7 +10,9 @@
 
 namespace stdexx {
 
-namespace ex = stdexec;
+// We do not need this as the user should
+// call runtime initialization and finalization
+// in ULT/stdexec scenarios.
 
 int context_init() { return qthread_initialize(); }
 
@@ -32,56 +34,54 @@ struct qthreads_context {
   qthreads_context &operator=(qthreads_context const &&other) { return *this; }
 };
 
-template <ex::receiver Receiver, ex::sender Work>
+template <stdexec::receiver Receiver, stdexec::sender Work>
 struct on_qthreads_receiver {
-  qthreads_context ctx_;
   Work work_;
   Receiver receiver_;
-  using receiver_concept = ex::receiver_t;
+  using receiver_concept = stdexec::receiver_t;
 
   void set_value(int i) noexcept {
     std::cout << "work_and_done" << std::endl;
-    ex::sender auto and_done = ex::then(work_, [](aligned_t *feb) {
+
+    stdexec::sender auto and_done = stdexec::then(work_, [](aligned_t *feb) {
       qthread_readFF(NULL, feb);
       std::cout << "FEB:" << feb << std::endl;
     });
 
-    auto op = ex::connect(and_done, std::move(receiver_));
-    ex::start(op);
+    auto op = stdexec::connect(and_done, std::move(receiver_));
+    stdexec::start(op);
   }
 
   void set_error(std::exception_ptr e) noexcept {
-    ex::set_error(std::move(receiver_), e);
+    stdexec::set_error(std::move(receiver_), e);
   }
 
-  void set_stopped() noexcept { ex::set_stopped(std::move(receiver_)); }
+  void set_stopped() noexcept { stdexec::set_stopped(std::move(receiver_)); }
 };
 
-template <ex::sender Previous, ex::sender Work>
+template <stdexec::sender Previous, stdexec::sender Work>
 struct on_qthreads_sender {
-  qthreads_context ctx_;
   Previous previous_;
   Work work_;
-  using sender_concept = ex::sender_t;
+  using sender_concept = stdexec::sender_t;
   using completion_signatures =
-    ex::completion_signatures<ex::set_value_t(int t),
-                              ex::set_error_t(std::exception_ptr),
-                              ex::set_stopped_t()>;
+    stdexec::completion_signatures<stdexec::set_value_t(int t),
+                                   stdexec::set_error_t(std::exception_ptr),
+                                   stdexec::set_stopped_t()>;
 
-  ex::env<> get_env() const noexcept { return {}; }
+  stdexec::env<> get_env() const noexcept { return {}; }
 
-  template <ex::receiver Receiver>
+  template <stdexec::receiver Receiver>
   auto connect(Receiver receiver) noexcept {
-    return ex::connect(previous_, on_qthreads_receiver{ctx_, work_, receiver});
+    return stdexec::connect(previous_, on_qthreads_receiver{work_, receiver});
   }
 };
 
-// This is motivated by the stdexec::then algorithm but takes a ctx and two
-// senders instead
-template <ex::sender Previous, ex::sender Work>
-auto then(Previous prev, qthreads_context &ctx, Work work)
-  -> on_qthreads_sender<Previous, Work> {
-  return {ctx, prev, work};
+// This is motivated by the stdexec::then algorithm but takes two
+// senders instead (instead of invocable)
+template <stdexec::sender Previous, stdexec::sender Work>
+auto then(Previous prev, Work work) -> on_qthreads_sender<Previous, Work> {
+  return {prev, work};
 }
 
 } // namespace stdexx

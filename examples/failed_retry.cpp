@@ -29,7 +29,7 @@ struct fail_some {
     }
   };
 
-  template <stdexx::receiver R>
+  template <stdexec::receiver R>
   auto connect(R r) noexcept -> op<R> {
     return {std::move(r)};
   }

@@ -8,7 +8,6 @@
 // stdexec backend
 #include <reference/algorithms.hpp>
 #include <stdexec/execution.hpp>
-namespace stdexx = stdexec;
 #else
 error "Not implemented."
 #endif

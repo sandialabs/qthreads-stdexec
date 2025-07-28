@@ -4,72 +4,17 @@
 #include <stdexx.hpp>
 
 #if (STDEXX_QTHREADS)
-
-aligned_t test_func(aligned_t val) noexcept {
-  std::cout << "hello, passed value is: " << val << std::endl;
-  return val;
-}
-
 auto main() -> int {
   stdexx::init();
-
-  // Basic example:
-  stdexec::sender auto begin = stdexec::schedule(stdexx::qthreads_scheduler{});
-  stdexec::sender auto hi_again = stdexec::then(std::move(begin), []() {
-    std::cout << "Hello world! Have an int.\n";
-    return 13;
+  stdexec::sender auto my_sender =
+    stdexec::schedule(stdexx::qthreads_scheduler{});
+  stdexec::sender auto algorithm = stdexec::then(std::move(my_sender), []() {
+    std::puts("Hello from user-level thread in then-lambda");
+    return 1;
   });
-  auto val = stdexec::sync_wait(std::move(hi_again)).value();
+
+  auto val = stdexec::sync_wait(std::move(algorithm)).value();
   std::cout << std::get<0>(val) << std::endl;
-
-  // A more complete set of usage examples:
-  stdexec::sync_wait(
-    stdexec::schedule(stdexx::qthreads_scheduler{}) | stdexec::then([]() {
-      std::cout << "hello from a then lambda returning void" << std::endl;
-    }));
-
-  stdexec::sender auto then =
-    stdexec::schedule(stdexx::qthreads_scheduler{}) | stdexec::then([]() {
-      std::cout << "hello from then returning a value" << std::endl;
-      return (aligned_t)1;
-    });
-  auto val3 = stdexec::sync_wait(std::move(then)).value();
-  std::cout << "value returned from then: " << std::get<0>(val3) << std::endl;
-
-  auto val4 = stdexec::sync_wait(
-                stdexx::qthreads_func_sender<decltype(&test_func), aligned_t>(
-                  &test_func, 4ull))
-                .value();
-  stdexx::qthreads_func_sender<decltype(&test_func), aligned_t> snd2(&test_func,
-                                                                     4ull);
-  auto val5 = stdexec::sync_wait(std::move(snd2)).value();
-  std::cout << "values from qthreads func sender: " << std::get<0>(val4) << ", "
-            << std::get<0>(val5) << std::endl;
-
-  stdexec::sync_wait(
-    stdexx::qthreads_func_sender([](int val) { return val; }, 2) |
-    stdexec::then([](auto val) {
-      std::cout << "then after func sender: " << val << std::endl;
-    }));
-
-  stdexec::sync_wait(
-    stdexx::qthreads_just_sender(2) | stdexec::then([](auto val) {
-      std::cout << "then after just sender: " << val << std::endl;
-    }));
-
-  stdexec::sync_wait(stdexx::qthreads_basic_func_sender([]() { return 5; }) |
-                     stdexec::then([](auto val) {
-                       std::cout << "then after basic func sender: " << val
-                                 << std::endl;
-                     }));
-
-  auto val6 =
-    stdexec::sync_wait(stdexec::when_all(stdexx::qthreads_just_sender(1),
-                                         stdexx::qthreads_just_sender(2)))
-      .value();
-  std::cout << "values from inside when_all: " << std::get<0>(val6) << " "
-            << std::get<1>(val6) << std::endl;
-
   stdexx::finalize();
   return 0;
 }
@@ -79,7 +24,7 @@ auto main() -> int {
 #include "exec/static_thread_pool.hpp"
 
 auto main() -> int {
-  using namespace stdexx;
+  using namespace stdexec;
   exec::static_thread_pool ctx{8};
   scheduler auto sch = ctx.get_scheduler();
 

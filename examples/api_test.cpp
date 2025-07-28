@@ -52,16 +52,18 @@ struct example_4 {
 
 struct example_5 {
   aligned_t test_func(aligned_t val) noexcept {
-  std::cout << "hello, passed value is: " << val << std::endl;
-  return val;
-}
+    std::cout << "hello, passed value is: " << val << std::endl;
+    return val;
+  }
+
   example_5() {
-    auto val1 = stdexec::sync_wait(
-                  stdexx::qthreads_func_sender<decltype(&example_5::test_func), aligned_t>(
-                    &example_5::test_func, 4ull))
-                  .value();
-    stdexx::qthreads_func_sender<decltype(&example_5::test_func), aligned_t> snd2(
-      &example_5::test_func, 4ull);
+    auto val1 =
+      stdexec::sync_wait(
+        stdexx::qthreads_func_sender<decltype(&example_5::test_func),
+                                     aligned_t>(&example_5::test_func, 4ull))
+        .value();
+    stdexx::qthreads_func_sender<decltype(&example_5::test_func), aligned_t>
+      snd2(&example_5::test_func, 4ull);
     auto val2 = stdexec::sync_wait(std::move(snd2)).value();
     std::cout << "values from qthreads func sender: " << std::get<0>(val1)
               << ", " << std::get<0>(val2) << std::endl;
@@ -96,6 +98,7 @@ struct example_8 {
                        }));
   }
 };
+
 /*
 struct example_9 {
   example_9() {

@@ -10,7 +10,10 @@ HASH=`date|md5sum|head -c 5`
 FILENAME="$binary_$HASH"
 FILENAME_ACTUAL=$FILENAME".res"
 
-echo "N,Time(sec)" | tee $FILENAME_ACTUAL
+export QT_NUM_SHEPHERDS=2
+export QT_NUM_WORKERS_PER_SHEPHERD=20
+
+echo "Implementation,N,Time(sec)" | tee $FILENAME_ACTUAL
 
 #for threads in {1..80..1}; do 
   for size in {1..38..1}; do 

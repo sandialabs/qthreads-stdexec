@@ -16,12 +16,18 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/modules")
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/modules/flags.cmake")
 
-option(ENABLE_BUILD_APPS "Build cgsolve example" OFF)
-option(ENABLE_BUILD_EXAMPLES "Build fibonacci example" ON)
+option(ENABLE_BUILD_APPS "Build apps " OFF)
+option(ENABLE_BUILD_EXAMPLES "Build examples" ON)
 
 set(EXEC_BACKEND qthreads CACHE STRING "Backend to use, options are 'reference', 'qthreads', and 'argobots'.")
 
-if ("${EXEC_BACKEND}" STREQUAL "qthreads")
+if ("${EXEC_BACKEND}" STREQUAL "qthreads_explicit")
+  find_package(qthread REQUIRED)
+  set(ULT_NAME "Qthreads")
+  set(ULT_LIB "qthread")
+  set(ULT_BACKEND_DEFINE "QTHREADS")
+  list(APPEND ULTs ${ULT_NAME})
+elseif ("${EXEC_BACKEND}" STREQUAL "qthreads")
   find_package(qthread REQUIRED)
   set(ULT_NAME "Qthreads")
   set(ULT_LIB "qthread")

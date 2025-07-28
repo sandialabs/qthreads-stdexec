@@ -23,6 +23,8 @@ int main() {
   // Print the results:
   std::printf("%d %d %d\n", i, j, k);
 }
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

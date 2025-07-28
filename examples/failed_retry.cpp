@@ -45,6 +45,8 @@ auto main() -> int {
   (void)a;
 }
 
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

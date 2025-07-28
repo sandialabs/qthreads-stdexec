@@ -8,6 +8,8 @@
 // stdexec backend
 #include <reference/algorithms.hpp>
 #include <stdexec/execution.hpp>
+#elif (QTHREADS)
+#include <qthread/qthread.h>
 #else
 error "Not implemented."
 #endif

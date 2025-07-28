@@ -37,6 +37,8 @@ auto main() -> int {
   std::cout << std::get<0>(val) << std::endl;
   return 0;
 }
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

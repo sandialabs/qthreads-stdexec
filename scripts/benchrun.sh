@@ -6,12 +6,16 @@ if [ x"$binary" = x ]; then
   exit 1
 fi
 
-echo "N,Time(sec)"
+HASH=`date|md5sum|head -c 5`
+FILENAME="$binary_$HASH"
+FILENAME_ACTUAL=$FILENAME".res"
+
+echo "N,Time(sec)" | tee $FILENAME_ACTUAL
 
 #for threads in {1..80..1}; do 
   for size in {1..38..1}; do 
     for repeats in {1..3..1}; do 
-      ./$binary $size
+      ./$binary $size | tee -a $FILENAME_ACTUAL
     done
   done
 #done

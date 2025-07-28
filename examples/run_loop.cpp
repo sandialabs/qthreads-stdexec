@@ -29,6 +29,8 @@ int main() {
   return result;
 }
 
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

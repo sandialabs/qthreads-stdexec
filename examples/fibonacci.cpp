@@ -52,9 +52,8 @@ static unsigned int validation[] = {
 
 static_assert(DEPTH <= 38 && DEPTH >= 0, "Select valid DEPTH.");
 
-#if (STDEXX_QTHREADS)
+#if (QTHREADS)
 
-#if (FIB_USE_QTHREADS_EXPLICITLY)
 static aligned_t fib(void *arg_) {
   unsigned int n = *(unsigned int *)arg_;
 
@@ -75,15 +74,15 @@ static aligned_t fib(void *arg_) {
 }
 
 auto main(int argc, char *argv[]) -> int {
-  int depth = DEPTH;
+  unsigned int depth = DEPTH;
   depth = argc == 2 ? atoi(argv[1]) : depth;
-  assert(depth < 38);
+  assert(depth <= 38);
 
   qthread_initialize();
 
   // timing this
   auto const start{steady_clock::now()};
-  int r = fib(depth);
+  unsigned int r = fib(static_cast<void *> (&depth));
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};
@@ -91,12 +90,12 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << depth << ", " << t.count() << std::endl;
+  std::cout << "qthreads" << ","<< depth << "," << t.count() << std::endl;
 
   qthread_finalize();
 }
 
-#else // FIB_USE_QTHREADS_EXPLICITLY
+#elif (STDEXX_QTHREADS)
 
 aligned_t fib(size_t n) {
   if (n < 2uz) return n;
@@ -110,9 +109,9 @@ aligned_t fib(size_t n) {
 }
 
 auto main(int argc, char *argv[]) -> int {
-  int depth = DEPTH;
+  unsigned int depth = DEPTH;
   depth = argc == 2 ? atoi(argv[1]) : depth;
-  assert(depth < 38);
+  assert(depth <= 38);
 
   stdexx::init();
 
@@ -126,13 +125,14 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << depth << ", " << t.count() << std::endl;
+  std::cout << "stdexx" << ","<< depth << "," << t.count() << std::endl;
 
   stdexx::finalize();
 }
-#endif
+
 #elif (STDEXX_REFERENCE)
-int fib(size_t n) {
+
+unsigned int fib(size_t n) {
   if (n < 2uz) return n;
   stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib);
   stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib);
@@ -142,9 +142,9 @@ int fib(size_t n) {
 }
 
 auto main(int argc, char *argv[]) -> int {
-  int depth = DEPTH;
+  unsigned int depth = DEPTH;
   depth = argc == 2 ? atoi(argv[1]) : depth;
-  assert(depth < 38);
+  assert(depth <= 38);
 
   auto const start{steady_clock::now()};
 
@@ -158,7 +158,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << depth << ", " << t.count() << std::endl;
+  std::cout << "stdexec" << "," << depth << "," << t.count() << std::endl;
 }
 
 #else

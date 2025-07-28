@@ -190,6 +190,8 @@ auto main() -> int {
   sync_wait(when_all(just(42), get_scheduler(), get_stop_token()));
   return 0;
 }
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

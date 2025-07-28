@@ -51,6 +51,8 @@ auto main() -> int {
 
 #elif (STDEXX_REFERENCE)
 auto main() -> int {}
+#elif (QTHREADS)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

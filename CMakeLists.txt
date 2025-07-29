@@ -21,7 +21,12 @@ option(ENABLE_BUILD_EXAMPLES "Build examples" ON)
 
 set(EXEC_BACKEND qthreads CACHE STRING "Backend to use, options are 'reference', 'qthreads', and 'argobots'.")
 
-if ("${EXEC_BACKEND}" STREQUAL "qthreads_explicit")
+if ("${EXEC_BACKEND}" STREQUAL "serial")
+  find_package(qthread REQUIRED)
+  set(ULT_NAME "serial")
+  set(ULT_BACKEND_DEFINE "SERIAL")
+  list(APPEND ULTs ${ULT_NAME})
+elseif ("${EXEC_BACKEND}" STREQUAL "qthreads_explicit")
   find_package(qthread REQUIRED)
   set(ULT_NAME "Qthreads")
   set(ULT_LIB "qthread")

@@ -52,7 +52,33 @@ static unsigned int validation[] = {
 
 static_assert(DEPTH <= 38 && DEPTH >= 0, "Select valid DEPTH.");
 
-#if (QTHREADS)
+#if (SERIAL)
+#include <assert.h>
+
+unsigned int fib(unsigned int n) {
+  if (n < 2) { return n; }
+  return fib(n - 1) + fib(n - 2);
+}
+
+auto main(int argc, char *argv[]) -> int {
+  unsigned int depth = DEPTH;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
+  assert(depth <= 38);
+
+  // timing this
+  auto const start{steady_clock::now()};
+  unsigned int r = fib(depth);
+  auto const end{steady_clock::now()};
+
+  std::chrono::duration<double> const t{end - start};
+  if (r != validation[depth]) {
+    std::cout << "Failed." << std::endl;
+    exit(1);
+  }
+  std::cout << "serial" << "," << depth << "," << t.count() << std::endl;
+}
+
+#elif (QTHREADS)
 
 static aligned_t fib(void *arg_) {
   unsigned int n = *(unsigned int *)arg_;
@@ -82,7 +108,7 @@ auto main(int argc, char *argv[]) -> int {
 
   // timing this
   auto const start{steady_clock::now()};
-  unsigned int r = fib(static_cast<void *> (&depth));
+  unsigned int r = fib(static_cast<void *>(&depth));
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};
@@ -90,7 +116,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "qthreads" << ","<< depth << "," << t.count() << std::endl;
+  std::cout << "qthreads" << "," << depth << "," << t.count() << std::endl;
 
   qthread_finalize();
 }
@@ -125,7 +151,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdexx" << ","<< depth << "," << t.count() << std::endl;
+  std::cout << "stdexx" << "," << depth << "," << t.count() << std::endl;
 
   stdexx::finalize();
 }

@@ -19,9 +19,11 @@ int main() {
   std::cout << r << std::endl;
   stdexx::finalize();
 }
-#elif (STDEXX_REFERENCE)
+#elif (STDEXX_REFERENCE || SERIAL)
 auto main() -> int {}
 #elif (QTHREADS)
+auto main() -> int {}
+#elif (SERIAL)
 auto main() -> int {}
 #else
 error "Not implemented."

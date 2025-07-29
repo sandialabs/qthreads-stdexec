@@ -123,6 +123,8 @@ auto main() -> int {
 auto main() -> int {}
 #elif (QTHREADS)
 auto main() -> int {}
+#elif (SERIAL)
+auto main() -> int {}
 #else
 error "Not implemented."
 #endif

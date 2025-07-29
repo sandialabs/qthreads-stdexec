@@ -10,6 +10,7 @@
 #include <stdexec/execution.hpp>
 #elif (QTHREADS)
 #include <qthread/qthread.h>
+#elif (SERIAL)
 #else
 error "Not implemented."
 #endif

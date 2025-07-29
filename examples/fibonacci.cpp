@@ -226,15 +226,17 @@ auto main(int argc, char *argv[]) -> int {
 }
 
 #elif (OMP)
+#include <omp.h>
+
 unsigned int fib(unsigned int n) {
   int i, j;
   if (n < 2) { return n; }
 
 #pragma omp task shared(i)
-  { i = fib(n - 1); }
+  i = fib(n - 1);
 
-#pragma omp task shared(i)
-  { j = fib(n - 2); }
+#pragma omp task shared(j)
+  j = fib(n - 2);
 
 #pragma omp taskwait
   return i + j;
@@ -250,7 +252,7 @@ auto main(int argc, char *argv[]) -> int {
   auto const start{steady_clock::now()};
 #pragma omp parallel shared(r)
 #pragma omp single
-  { r = fib(depth); }
+  r = fib(depth);
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};

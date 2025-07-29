@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -53,8 +54,6 @@ static unsigned int validation[] = {
 static_assert(DEPTH <= 38 && DEPTH >= 0, "Select valid DEPTH.");
 
 #if (SERIAL)
-#include <assert.h>
-
 unsigned int fib(unsigned int n) {
   if (n < 2) { return n; }
   return fib(n - 1) + fib(n - 2);
@@ -226,6 +225,41 @@ auto main(int argc, char *argv[]) -> int {
   std::cout << "stdexec" << "," << depth << "," << t.count() << std::endl;
 }
 
+#elif (OMP)
+unsigned int fib(unsigned int n) {
+  int i, j;
+  if (n < 2) { return n; }
+
+#pragma omp task shared(i)
+  { i = fib(n - 1); }
+
+#pragma omp task shared(i)
+  { j = fib(n - 2); }
+
+#pragma omp taskwait
+  return i + j;
+}
+
+auto main(int argc, char *argv[]) -> int {
+  unsigned int depth = DEPTH;
+  unsigned int r;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
+  assert(depth <= 38);
+
+  // timing this
+  auto const start{steady_clock::now()};
+#pragma omp parallel shared(r)
+#pragma omp single
+  { r = fib(depth); }
+  auto const end{steady_clock::now()};
+
+  std::chrono::duration<double> const t{end - start};
+  if (r != validation[depth]) {
+    std::cout << "Failed." << std::endl;
+    exit(1);
+  }
+  std::cout << "omp-task" << "," << depth << "," << t.count() << std::endl;
+}
 #else
 error "Not implemented."
 #endif

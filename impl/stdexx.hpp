@@ -11,6 +11,7 @@
 #elif (QTHREADS)
 #include <qthread/qthread.h>
 #elif (SERIAL)
+#elif (OMP)
 #else
 error "Not implemented."
 #endif

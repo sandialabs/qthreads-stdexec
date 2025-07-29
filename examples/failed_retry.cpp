@@ -47,6 +47,8 @@ auto main() -> int {
 
 #elif (QTHREADS)
 auto main() -> int {}
+#elif (OMP)
+auto main() -> int {}
 #elif (SERIAL)
 auto main() -> int {}
 #else

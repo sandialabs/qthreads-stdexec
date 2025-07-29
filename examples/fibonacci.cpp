@@ -158,6 +158,7 @@ auto main(int argc, char *argv[]) -> int {
 
 #elif (STDEXX_REFERENCE)
 
+#if 0
 unsigned int fib(size_t n) {
   if (n < 2uz) return n;
   stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib);
@@ -176,6 +177,44 @@ auto main(int argc, char *argv[]) -> int {
 
   auto [r] =
     stdexec::sync_wait(stdexec::just(depth) | stdexec::then(&fib)).value();
+  auto const end{steady_clock::now()};
+
+  std::chrono::duration<double> const t{end - start};
+
+  if (r != validation[depth]) {
+    std::cout << "Failed." << std::endl;
+    exit(1);
+  }
+  std::cout << "stdexec" << "," << depth << "," << t.count() << std::endl;
+}
+
+#endif
+
+#include "exec/static_thread_pool.hpp"
+
+unsigned int fib(size_t n) {
+  if (n < 2uz) return n;
+  stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib);
+  stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib);
+  auto [r1, r2] =
+    stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
+  return r1 + r2;
+}
+
+auto main(int argc, char *argv[]) -> int {
+  using namespace stdexec;
+  unsigned int depth = DEPTH;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
+  assert(depth <= 38);
+
+  exec::static_thread_pool ctx{8};
+  scheduler auto sched = ctx.get_scheduler();
+
+  auto const start{steady_clock::now()};
+  auto algorithm =
+    stdexec::starts_on(sched, stdexec::just(depth) | stdexec::then(fib));
+
+  auto [r] = sync_wait(algorithm).value();
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};

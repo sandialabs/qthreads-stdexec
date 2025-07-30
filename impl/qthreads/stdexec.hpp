@@ -71,7 +71,7 @@ struct qthreads_domain {
   // to cover that base case.
   template <typename Sn, typename... Env>
     requires is_qthreads_sender<Sn>
-  auto &&transform_sender(Sn &&sndr, Env const &...env) const noexcept;
+  auto transform_sender(Sn &&sndr, Env const &...env) const noexcept;
 
   // The domain's apply_sender routine is used to implement
   // customization of sync_wait. Here we're just forwarding
@@ -902,9 +902,9 @@ struct apply_sender_for<stdexec::sync_wait_t> {
 // Base case for transform_sender.
 template <typename Sn, typename... Env>
   requires is_qthreads_sender<Sn>
-auto &&qthreads_domain::transform_sender(Sn &&sndr,
-                                         Env const &...env) const noexcept {
-  return std::move(sndr);
+auto qthreads_domain::transform_sender(Sn &&sndr,
+                                       Env const &...env) const noexcept {
+  return sndr;
 }
 
 // Associate our various types with the qthreads_domain.

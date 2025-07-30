@@ -51,7 +51,7 @@ struct example_4 {
 };
 
 struct example_5 {
-  aligned_t test_func(aligned_t val) noexcept {
+  static aligned_t test_func(aligned_t val) noexcept {
     std::cout << "hello, passed value is: " << val << std::endl;
     return val;
   }

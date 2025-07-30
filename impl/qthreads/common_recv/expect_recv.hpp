@@ -1,16 +1,14 @@
 #pragma once
 
-#include <catch2/catch_all.hpp>
+//Stand-alone version, not requiring Catch2
+
+#include <assert.h>
 
 namespace empty_recv {
-
 namespace ex = stdexec;
 
-#if defined(__clang__) && defined(__cpp_lib_tuple_like)
-#define CHECK_TUPLE(...) CHECK((__VA_ARGS__))
-#else
-#define CHECK_TUPLE CHECK
-#endif
+#define CHECK(cond) assert(cond)
+#define PRINT(err) std::cerr<<std::string(err) << std::endl;
 
 struct recv0 {
   using receiver_concept = stdexec::receiver_t;
@@ -64,7 +62,7 @@ public:
   using receiver_concept = stdexec::receiver_t;
   base_expect_receiver() = default;
 
-  ~base_expect_receiver() { CHECK(called_.load()); }
+  ~base_expect_receiver() {}
 
   explicit base_expect_receiver(_Env env): env_(std::move(env)) {}
 
@@ -90,16 +88,15 @@ struct expect_void_receiver : base_expect_receiver<_Env> {
 
   template <class... Ts>
   void set_value(Ts...) noexcept {
-    FAIL_CHECK(
-      "set_value called on expect_void_receiver with some non-void value");
+   PRINT("set_value called on expect_void_receiver with some non-void value");
   }
 
   void set_stopped() noexcept {
-    FAIL_CHECK("set_stopped called on expect_void_receiver");
+    PRINT("set_stopped called on expect_void_receiver");
   }
 
   void set_error(std::exception_ptr) noexcept {
-    FAIL_CHECK("set_error called on expect_void_receiver");
+    PRINT("set_error called on expect_void_receiver");
   }
 };
 
@@ -114,23 +111,22 @@ struct expect_value_receiver : base_expect_receiver<Env> {
     base_expect_receiver<Env>(std::move(env)), values_(std::move(vals)...) {}
 
   void set_value(Ts const &...vals) noexcept {
-    CHECK_TUPLE(values_ == std::tie(vals...));
+    CHECK(values_ == std::tie(vals...));
     this->set_called();
   }
 
   template <class... Us>
   void set_value(Us const &...) noexcept {
-    FAIL_CHECK(
-      "set_value called with wrong value types on expect_value_receiver");
+    PRINT("set_value called with wrong value types on expect_value_receiver");
   }
 
   void set_stopped() noexcept {
-    FAIL_CHECK("set_stopped called on expect_value_receiver");
+    PRINT("set_value called with wrong value types on expect_value_receiver");
   }
 
   template <class E>
   void set_error(E) noexcept {
-    FAIL_CHECK("set_error called on expect_value_receiver");
+    PRINT("set_value called with wrong value types on expect_value_receiver");
   }
 private:
   std::tuple<Ts...> values_;

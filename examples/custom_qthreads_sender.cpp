@@ -4,23 +4,18 @@
 /* One qthread per func with sender-receiver implementing a fork-join */
 
 #if (STDEXX_QTHREADS)
-static inline auto task1(int) -> aligned_t {
-  std::cout << "Hello from qthread task 1!" << std::endl;
-  return 42 + 0;
+static auto task(void*) -> aligned_t {
+  std::cout << "Hello from qthread task!" << std::endl;
+  return 42;
 }
-
-static inline auto task2(int) -> aligned_t {
-  std::cout << "Hello from qthread task 2!" << std::endl;
-  return 42 + 1;
-}
-
-static inline auto task3() -> aligned_t {
-  std::cout << "Hello from qthread task 3!" << std::endl;
-  return 42 + 2;
-}
+/*
+static auto task_inline(aligned_t *) -> aligned_t {
+  std::cout << "Hello from task inline to caller!" << std::endl;
+  return (aligned_t)42;
+}*/
 
 // Calls qthread_fork()
-struct sender_wrapper {
+struct sender {
   using sender_concept = stdexec::sender_t;
   qthread_f func;
   aligned_t feb;
@@ -54,7 +49,7 @@ struct sender_wrapper {
 };
 
 // Calls read FF (join)
-struct sender_wrapper_receiver {
+struct receiver {
   using receiver_concept = stdexec::receiver_t;
 
   void set_value(aligned_t *feb) noexcept { qthread_readFF(NULL, feb); }
@@ -65,7 +60,7 @@ struct sender_wrapper_receiver {
 };
 
 // Synchronously fork and join a qthread
-struct sender_wrapper_sync {
+struct sender_forkjoin {
   using sender_concept = stdexec::sender_t;
   qthread_f func;
   aligned_t feb;
@@ -85,7 +80,7 @@ struct sender_wrapper_sync {
       int r = qthread_fork(func, NULL /*no args*/, feb);
       qthread_readFF(NULL, feb);
       if (r) stdexec::set_error(std::move(rcv), std::exception_ptr());
-      stdexec::set_value(std::move(rcv), feb);
+      stdexec::set_value(std::move(rcv), *feb);
     }
   };
 
@@ -98,24 +93,36 @@ struct sender_wrapper_sync {
 };
 
 auto main() -> int {
-  stexx::init();
-  /*Explicit use of custom senders*/
-  stdexec::sender auto s1 = then(stdexec::just(42), sender_wrapper{task1, 0});
-  stdexec::sender auto s2 = then(stdexec::just(42), sender_wrapper{task2, 0});
-  auto val = stdexec::sync_wait(stdexec::when_all(s1, s2)).value();
-  // std::cout << std::get<0>(val) << std::endl;
+  stdexx::init();
 
-  // Using sender_wrapper and sender_wrapper_receiver
-  stdexec::sender auto s5 = sender_wrapper{task3};
-  auto op1 = stdexec::connect(s5, sender_wrapper_receiver{});
+  //Example 1
+  stdexec::sender auto my_qthreads_sender = sender{task, 0};
+  stdexec::receiver auto my_qthreads_sender_receiver = receiver{};
+  auto op1 = stdexec::connect(my_qthreads_sender, my_qthreads_sender_receiver);
   stdexec::start(op1);
 
-  // Just run sender_wrapper_sync
-  auto s3 = sender_wrapper_sync{task3};
-  auto op2 =
-    stdexec::connect(s3, empty_recv::expect_value_receiver{(aligned_t)44});
+  //Example 2
+  auto sender_fj = sender_forkjoin{task};
+  auto op = stdexec::connect(sender_fj, empty_recv::expect_value_receiver{(aligned_t)42});
+  stdexec::start(op);
+
+  //Example 3
+  //Custom then to implement sync
+  stdexec::sender auto s1 =
+    stdexx::then(stdexec::just(42), sender{task, 0});
+  stdexec::sender auto s2 =
+    stdexx::then(stdexec::just(42), sender{task, 0});
+  auto [v1,v2] = stdexec::sync_wait(stdexec::when_all(s1, s2)).value();
+  std::cout << *v1 + *v2 << std::endl;
+
+  //Example 4 //Should this work?
+  //Using custom sender and receiver to fork-off work and joining threads via my_qthreads_sender_receiver 
+  /*stdexec::sender auto work = stdexec::then(my_qthreads_sender, task_inline);
+  auto op2 = stdexec::connect(work, my_qthreads_sender_receiver);
   stdexec::start(op2);
-  stexx::finalize();
+  */
+
+  stdexx::finalize();
   return 0;
 }
 

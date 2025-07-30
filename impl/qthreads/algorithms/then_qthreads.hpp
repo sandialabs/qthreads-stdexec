@@ -35,9 +35,9 @@ struct qthreads_context {
 };
 
 template <stdexec::receiver Receiver, stdexec::sender Work>
-struct on_qthreads_receiver {
-  Work work_;
+struct on_qthreads_receiver : Receiver {
   Receiver receiver_;
+  Work work_;
   using receiver_concept = stdexec::receiver_t;
 
   void set_value(int i) noexcept {
@@ -47,7 +47,6 @@ struct on_qthreads_receiver {
       qthread_readFF(NULL, feb);
       std::cout << "FEB:" << feb << std::endl;
     });
-
     auto op = stdexec::connect(and_done, std::move(receiver_));
     stdexec::start(op);
   }
@@ -65,20 +64,20 @@ struct on_qthreads_sender {
   Work work_;
   using sender_concept = stdexec::sender_t;
   using completion_signatures =
-    stdexec::completion_signatures<stdexec::set_value_t(int t),
+    stdexec::completion_signatures<stdexec::set_value_t(aligned_t *),
                                    stdexec::set_error_t(std::exception_ptr),
                                    stdexec::set_stopped_t()>;
 
   stdexec::env<> get_env() const noexcept { return {}; }
 
   template <stdexec::receiver Receiver>
-  auto connect(Receiver receiver) noexcept {
-    return stdexec::connect(previous_, on_qthreads_receiver{work_, receiver});
+  auto connect(Receiver receiver) && -> stdexec::connect_result_t<Previous, on_qthreads_receiver<Receiver, Work>> {
+    return stdexec::connect(previous_, on_qthreads_receiver{receiver, work_});
   }
 };
 
 // This is motivated by the stdexec::then algorithm but takes two
-// senders instead (instead of invocable)
+// senders instead of invocable so we can use a custom qthreads sender
 template <stdexec::sender Previous, stdexec::sender Work>
 auto then(Previous prev, Work work) -> on_qthreads_sender<Previous, Work> {
   return {prev, work};

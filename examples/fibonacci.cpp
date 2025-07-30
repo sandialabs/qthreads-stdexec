@@ -74,7 +74,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "serial" << "," << depth << "," << t.count() << std::endl;
+  std::cout << "serial" << "," << depth << "," << t.count() << "," << 1 << std::endl;
 }
 
 #elif (QTHREADS)
@@ -115,15 +115,22 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "qthreads" << "," << depth << "," << t.count() << std::endl;
+  std::cout << "qthreads" << "," << depth << "," << t.count()  << "," << qthread_num_shepherds() * qthread_num_workers() << std::endl;
 
   qthread_finalize();
 }
 
 #elif (STDEXX_QTHREADS)
 
+#define CUT_OFF  0
+
 aligned_t fib(size_t n) {
   if (n < 2uz) return n;
+
+  if(n < CUT_OFF)
+    return fib(n - 1) + fib(n - 2);
+  else
+  {
   stdexec::sender auto s1 =
     stdexx::qthreads_just_sender(n - 1uz) | stdexec::then(&fib);
   stdexec::sender auto s2 =
@@ -131,6 +138,7 @@ aligned_t fib(size_t n) {
   auto [r1, r2] =
     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
   return r1 + r2;
+  }
 }
 
 auto main(int argc, char *argv[]) -> int {
@@ -150,7 +158,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdexx" << "," << depth << "," << t.count() << std::endl;
+  std::cout << "stdexx" << "," << depth << "," << t.count() << "," << qthread_num_shepherds() * qthread_num_workers() << std::endl;
 
   stdexx::finalize();
 }
@@ -206,7 +214,9 @@ auto main(int argc, char *argv[]) -> int {
   depth = argc == 2 ? atoi(argv[1]) : depth;
   assert(depth <= 38);
 
-  exec::static_thread_pool ctx{8};
+  unsigned int THREADS = 1;
+
+  exec::static_thread_pool ctx{THREADS};
   scheduler auto sched = ctx.get_scheduler();
 
   auto const start{steady_clock::now()};
@@ -222,7 +232,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdexec" << "," << depth << "," << t.count() << std::endl;
+  std::cout << "stdexec" << "," << depth << "," << t.count() << "," << THREADS << std::endl;
 }
 
 #elif (OMP)
@@ -260,7 +270,7 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "omp-task" << "," << depth << "," << t.count() << std::endl;
+  std::cout << "omp-task" << "," << depth << "," << t.count() << "," << omp_get_max_threads() << std::endl;
 }
 #else
 error "Not implemented."

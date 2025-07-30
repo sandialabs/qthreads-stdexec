@@ -13,6 +13,8 @@
 
 #include "common.hpp"
 
+//#define SEQUENTIAL_WRAPPER_BACKEND
+
 namespace stdexx {
 
 int init() { return qthread_initialize(); }

@@ -136,14 +136,22 @@ struct qt_os_base : immovable {
       stdexec::set_stopped(std::move(receiver));
       return;
     }*/
+#ifdef SEQUENTIAL_WRAPPER_BACKEND
+    Derived_Op_State::task(this);
+#else
     int r = qthread_fork(&Derived_Op_State::task, this, &feb);
 
     if (r != QTHREAD_SUCCESS) {
       stdexec::set_error(std::move(this->receiver), r);
     }
+#endif
   }
 
-  inline void wait() noexcept { qthread_readFF(NULL, &feb); }
+  inline void wait() noexcept {
+#ifndef SEQUENTIAL_WRAPPER_BACKEND
+    qthread_readFF(NULL, &feb);
+#endif
+  }
 };
 
 // Operation state for the case where we're just returning a sender

@@ -8,7 +8,7 @@
 using namespace std::chrono;
 
 #define DEFAULT_DEPTH 6uz
-#define DEFAULT_THRESHOLD 6uz
+#define DEFAULT_THRESHOLD 36uz
 
 static std::size_t validation[] = {
   0uz,        // 0
@@ -94,7 +94,57 @@ auto main(int argc, char *argv[]) -> int {
             << std::endl;
 }
 
+#elif (STDTHREAD)
+//*********************
+//*********************
+//*********************
+
+#include <thread>
+#include <future>
+
+void fib(unsigned int n, std::promise<int> && p) {
+  if (n < 2) { p.set_value(n); return; }
+
+  std::promise<int> p1;
+  std::promise<int> p2;
+  auto ret1 = p1.get_future();
+  auto ret2 = p2.get_future();
+  unsigned int n1 = n - 1, n2 = n - 2;
+
+  std::thread t1 (fib, n1, std::move(p1));
+  t1.join();
+  std::thread t2 (fib, n2, std::move(p2));
+  t2.join();
+
+  p.set_value(ret1.get() + ret2.get());
+}
+
+auto main(int argc, char *argv[]) -> int {
+  unsigned int depth = DEPTH;
+  depth = argc == 2 ? atoi(argv[1]) : depth;
+  assert(depth <= 38);
+
+  // timing this
+  auto const start{steady_clock::now()};
+  std::promise<int> p;
+  auto f = p.get_future();
+  std::thread thr (fib,depth,std::move(p));
+  thr.join();
+  unsigned int r = f.get();
+  auto const end{steady_clock::now()};
+
+  std::chrono::duration<double> const t{end - start};
+  if (r != validation[depth]) {
+    std::cout << "Failed." << std::endl;
+    exit(1);
+  }
+  std::cout << "stdthread" << "," << depth << "," << t.count() << "," << 1 << std::endl;
+}
+
 #elif (QTHREADS)
+//*********************
+//*********************
+//*********************
 
 static aligned_t fib(void *arg_) {
   auto n = *(std::size_t *)arg_;
@@ -137,6 +187,9 @@ auto main(int argc, char *argv[]) -> int {
 }
 
 #elif (STDEXX_QTHREADS)
+//*********************
+//*********************
+//*********************
 
 std::size_t fib(std::size_t n) {
   if (n < threshold) return fib_serial(n);
@@ -148,7 +201,6 @@ std::size_t fib(std::size_t n) {
     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
   return r1 + r2;
 }
-}
 
 auto main(int argc, char *argv[]) -> int {
   auto depth = get_depth_and_set_threshold(argc, argv);
@@ -156,23 +208,30 @@ auto main(int argc, char *argv[]) -> int {
   stdexx::init();
 
   auto const start{steady_clock::now()};
-  auto r = fib(depth);
+  auto [r] = stdexec::sync_wait(stdexx::qthreads_just_sender(depth) |
+    stdexec::then(&fib)).value();
   auto const end{steady_clock::now()};
   std::chrono::duration<double> const t{end - start};
   if (r != validation[depth]) {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdexx" << "," << depth << "," << t.count() << ","
+  std::cout << "stdexec(qthreads)" << "," << depth << "," << t.count() << ","
             << qthread_num_shepherds() * qthread_num_workers() << std::endl;
 
   stdexx::finalize();
 }
 
 #elif (STDEXX_REFERENCE)
+//*********************
+//*********************
+//*********************
 
-#if 0
+#include "exec/static_thread_pool.hpp"
+constexpr int THREADS=1;
+#if 1
 unsigned int fib(size_t n) {
+  if (n < threshold) return fib_serial(n);
   if (n < 2uz) return n;
   stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib);
   stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib);
@@ -180,57 +239,36 @@ unsigned int fib(size_t n) {
     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
   return r1 + r2;
 }
-
-auto main(int argc, char *argv[]) -> int {
-  unsigned int depth = DEPTH;
-  depth = argc == 2 ? atoi(argv[1]) : depth;
-  assert(depth <= 38);
-
-  auto const start{steady_clock::now()};
-
-  auto [r] =
-    stdexec::sync_wait(stdexec::just(depth) | stdexec::then(&fib)).value();
-  auto const end{steady_clock::now()};
-
-  std::chrono::duration<double> const t{end - start};
-
-  if (r != validation[depth]) {
-    std::cout << "Failed." << std::endl;
-    exit(1);
-  }
-  std::cout << "stdexec" << "," << depth << "," << t.count() << std::endl;
-}
-
-#endif
-
-#include "exec/static_thread_pool.hpp"
-
-#ifndef NUM_THREADS
-#define NUM_THREADS 8
-#endif
-
-static exec::static_thread_pool ctx{8};
-
+#else
+// **** using static_thread_pool on each nesting level *****
 unsigned int fib(size_t n) {
-  if (n < threshold) return fib_serial(n);
-  stdexec::scheduler auto sched = ctx.get_scheduler();
-  stdexec::sender auto s1 =
-    stdexec::starts_on(sched, stdexec::just(n - 1uz) | stdexec::then(&fib));
-  stdexec::sender auto s2 =
-    stdexec::starts_on(sched, stdexec::just(n - 2uz) | stdexec::then(&fib));
-  auto [r1, r2] =
-    stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
+  exec::static_thread_pool ctx{THREADS};
+  using namespace stdexec;
+  scheduler auto sched = ctx.get_scheduler();
+  if (n < 2uz) return n;
+  sender auto s1 = starts_on(sched, just(n - 1uz) | then(fib));
+  sender auto s2 = starts_on(sched, just(n - 2uz) | then(fib));
+  /*auto [r1, r2] =
+    sync_wait(when_all(std::move(s1), std::move(s2))).value();*/
+    auto [r1] =
+    sync_wait(when_all(std::move(s1))).value();
+    auto [r2] =
+    sync_wait(when_all(std::move(s2))).value();
   return r1 + r2;
 }
-
+#endif
 auto main(int argc, char *argv[]) -> int {
   auto depth = get_depth_and_set_threshold(argc, argv);
   using namespace stdexec;
 
-  exec::static_thread_pool ctx{8};
+exec::static_thread_pool ctx{THREADS};
+  scheduler auto sched = ctx.get_scheduler();
 
   auto const start{steady_clock::now()};
-  auto r = fib(depth);
+  auto algorithm =
+    stdexec::starts_on(sched, stdexec::just(depth) | stdexec::then(fib));
+
+  auto [r] = sync_wait(algorithm).value();
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};
@@ -239,18 +277,20 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdexec" << "," << depth << "," << t.count() << ","
-            << NUM_THREADS << std::endl;
+  std::cout << "stdexec(reference)" << "," << depth << "," << t.count() << ","
+            << THREADS << std::endl;
 }
 
 #elif (OMP)
+//*********************
+//*********************
+//*********************
 #include <omp.h>
 
 std::size_t fib(std::size_t n) {
   std::size_t i, j;
   if (n < threshold) return fib_serial(n);
 
-#pragma omp parallel
 #pragma omp task shared(i)
   i = fib(n - 1);
 
@@ -267,6 +307,8 @@ auto main(int argc, char *argv[]) -> int {
   // timing this
   auto const start{steady_clock::now()};
 
+  #pragma omp parallel
+  #pragma omp single
   auto r = fib(depth);
   auto const end{steady_clock::now()};
 

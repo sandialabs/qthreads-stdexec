@@ -21,8 +21,12 @@ option(ENABLE_BUILD_EXAMPLES "Build examples" ON)
 
 set(EXEC_BACKEND qthreads CACHE STRING "Backend to use, options are 'reference', 'qthreads', and 'argobots'.")
 
-
-if ("${EXEC_BACKEND}" STREQUAL "openmp")
+if ("${EXEC_BACKEND}" STREQUAL "stdthread")
+  find_package(OpenMP REQUIRED)
+  set(ULT_NAME "STDTHREAD")
+  set(ULT_BACKEND_DEFINE "STDTHREAD")
+  list(APPEND ULTs ${ULT_NAME})
+elseif ("${EXEC_BACKEND}" STREQUAL "openmp")
   find_package(OpenMP REQUIRED)
   set(ULT_NAME "OMP")
   set(ULT_BACKEND_DEFINE "OMP")

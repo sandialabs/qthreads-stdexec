@@ -27,6 +27,8 @@ int main() {
 auto main() -> int {}
 #elif (OMP)
 auto main() -> int {}
+#elif (STDTHREAD)
+auto main() -> int {}
 #elif (SERIAL)
 auto main() -> int {}
 #else

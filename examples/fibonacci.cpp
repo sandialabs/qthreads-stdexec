@@ -8,7 +8,7 @@
 using namespace std::chrono;
 
 #define DEFAULT_DEPTH 6uz
-#define DEFAULT_THRESHOLD 36uz
+#define DEFAULT_THRESHOLD 2uz
 
 static std::size_t validation[] = {
   0uz,        // 0
@@ -51,6 +51,11 @@ static std::size_t validation[] = {
   24157817uz, // 37
   39088169uz  // 38
 };
+
+unsigned int sleep_1sec(size_t n) {
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  return 1uz;
+}
 
 static_assert(DEFAULT_DEPTH <= 38uz, "Select valid DEPTH.");
 
@@ -227,18 +232,36 @@ auto main(int argc, char *argv[]) -> int {
 //*********************
 //*********************
 
+#define USE_SCHED_ON_EACH_LEVEL
+
 #include "exec/static_thread_pool.hpp"
 constexpr int THREADS=1;
-#if 1
-unsigned int fib(size_t n) {
+
+#if !defined(USE_CTX_ON_EACH_LEVEL)
+
+unsigned int fib_per_thread(size_t n) {
   if (n < threshold) return fib_serial(n);
   if (n < 2uz) return n;
-  stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib);
-  stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib);
+  stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread);
+  stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread);
   auto [r1, r2] =
     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
   return r1 + r2;
 }
+
+  static exec::static_thread_pool ctx{THREADS};
+ unsigned int fib(size_t n) {
+  if (n < threshold) return fib_serial(n);
+    stdexec::scheduler auto sched = ctx.get_scheduler();
+    // Note: using start_on recursively results in a deadlock
+    stdexec::sender auto s1 =
+    stdexec::starts_on(sched, stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread));
+    stdexec::sender auto s2 =
+    stdexec::starts_on(sched, stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread));
+   auto [r1, r2] =
+     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
+   return r1 + r2;
+ }
 #else
 // **** using static_thread_pool on each nesting level *****
 unsigned int fib(size_t n) {
@@ -261,14 +284,13 @@ auto main(int argc, char *argv[]) -> int {
   auto depth = get_depth_and_set_threshold(argc, argv);
   using namespace stdexec;
 
-exec::static_thread_pool ctx{THREADS};
-  scheduler auto sched = ctx.get_scheduler();
-
   auto const start{steady_clock::now()};
-  auto algorithm =
-    stdexec::starts_on(sched, stdexec::just(depth) | stdexec::then(fib));
-
-  auto [r] = sync_wait(algorithm).value();
+  #if !defined(USE_SCHED_ON_EACH_LEVEL)
+  auto algorithm = stdexec::just(depth) | stdexec::then(fib));
+    auto [r] = sync_wait(algorithm).value();
+  #else
+    std::size_t r = fib(depth);
+  #endif
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};
@@ -302,14 +324,14 @@ std::size_t fib(std::size_t n) {
 }
 
 auto main(int argc, char *argv[]) -> int {
+  std::size_t r;
   auto depth = get_depth_and_set_threshold(argc, argv);
 
   // timing this
   auto const start{steady_clock::now()};
-
-  #pragma omp parallel
+  #pragma omp parallel shared(r)
   #pragma omp single
-  auto r = fib(depth);
+  r = fib(depth);
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};

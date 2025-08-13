@@ -53,6 +53,9 @@ template <typename outer_op_state_t,
           bool uses_outer_qthread = false>
 struct when_all_item_receiver;
 
+template <class R, class F>
+class qthreads_then_receiver;
+
 struct qthreads_domain {
   // The example we're following for transform_sender uses
   // stdexec::sender_expr as the concept for Sender here,
@@ -134,6 +137,10 @@ template <typename op, std::size_t I, bool uses_outer_qthread>
 static constexpr bool
   has_outer_qthread<when_all_item_receiver<op, I, uses_outer_qthread>> =
     uses_outer_qthread;
+
+template <typename R, typename F>
+static constexpr bool has_outer_qthread<qthreads_then_receiver<R, F>> =
+  has_outer_qthread<R>;
 
 // CRTP type used by the various operation states.
 // This implements the qthread_fork call and stores the FEB.

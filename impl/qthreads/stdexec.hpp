@@ -129,6 +129,7 @@ struct qthreads_env {
 template <typename Rec>
 static constexpr bool has_outer_qthread = false;
 
+#ifndef QTHREADS_SUPPRESS_WRAPPER_OPT
 template <typename... Vs>
 static constexpr bool
   has_outer_qthread<stdexec::__sync_wait::__receiver<Vs...>> = true;
@@ -141,6 +142,7 @@ static constexpr bool
 template <typename R, typename F>
 static constexpr bool has_outer_qthread<qthreads_then_receiver<R, F>> =
   has_outer_qthread<R>;
+#endif // #ifndef QTHREADS_SUPPRESS_WRAPPER_OPT
 
 // CRTP type used by the various operation states.
 // This implements the qthread_fork call and stores the FEB.

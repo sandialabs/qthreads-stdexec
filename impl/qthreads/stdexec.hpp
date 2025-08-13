@@ -47,6 +47,12 @@ struct transform_sender_for;
 template <class Tag>
 struct apply_sender_for;
 
+// Needed for some specializations.
+template <typename outer_op_state_t,
+          std::size_t Index,
+          bool uses_outer_qthread = false>
+struct when_all_item_receiver;
+
 struct qthreads_domain {
   // The example we're following for transform_sender uses
   // stdexec::sender_expr as the concept for Sender here,
@@ -117,6 +123,18 @@ struct qthreads_env {
                                     qthreads_env const &) noexcept;
 };
 
+template <typename Rec>
+static constexpr bool has_outer_qthread = false;
+
+template <typename... Vs>
+static constexpr bool
+  has_outer_qthread<stdexec::__sync_wait::__receiver<Vs...>> = true;
+
+template <typename op, std::size_t I, bool uses_outer_qthread>
+static constexpr bool
+  has_outer_qthread<when_all_item_receiver<op, I, uses_outer_qthread>> =
+    uses_outer_qthread;
+
 // CRTP type used by the various operation states.
 // This implements the qthread_fork call and stores the FEB.
 // The associated qthread_readFF call happens during sync_wait
@@ -128,6 +146,8 @@ template <typename Derived_Op_State, typename Receiver>
 struct qt_os_base : immovable {
   aligned_t feb;
   Receiver receiver;
+
+  static constexpr bool uses_outer_qthread = has_outer_qthread<Receiver>;
 
   template <typename Receiver_>
   qt_os_base(Receiver_ &&r): feb(0u), receiver(std::forward<Receiver_>(r)) {}
@@ -248,7 +268,7 @@ struct basic_func_operation_state :
 template <bool needs_continuation, typename Receiver, typename... Senders>
 struct when_all_op_state;
 
-template <typename outer_op_state_t, std::size_t Index>
+template <typename outer_op_state_t, std::size_t Index, bool uses_outer_qthread>
 struct when_all_item_receiver {
   using receiver_concept = stdexec::receiver_t;
 

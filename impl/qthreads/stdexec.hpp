@@ -126,13 +126,25 @@ struct qthreads_env {
                                     qthreads_env const &) noexcept;
 };
 
+// Have to jump through some extra hoops to check whether a receiver type
+// is the one internal to sync_wait.
+// TODO: just implement our own sync_wait receiver type instead of re-using
+// theirs.
+template <typename T>
+static constexpr bool is_sync_wait_receiver = false;
+
+template <typename... Vs>
+static constexpr bool
+  is_sync_wait_receiver<stdexec::__sync_wait::__receiver<Vs...>> = true;
+
 template <typename Rec>
 static constexpr bool has_outer_qthread = false;
 
 #ifndef QTHREADS_SUPPRESS_WRAPPER_OPT
-template <typename... Vs>
-static constexpr bool
-  has_outer_qthread<stdexec::__sync_wait::__receiver<Vs...>> = true;
+template <typename R>
+  requires(!std::is_same_v<stdexec::__id<R>, R>)
+static constexpr bool has_outer_qthread<R> =
+  is_sync_wait_receiver<stdexec::__id<R>>;
 
 template <typename op, std::size_t I, bool uses_outer_qthread>
 static constexpr bool

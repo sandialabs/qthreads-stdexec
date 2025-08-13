@@ -4,10 +4,11 @@
 /* One qthread per func with sender-receiver implementing a fork-join */
 
 #if (STDEXX_QTHREADS)
-static auto task(void*) -> aligned_t {
+static auto task(void *) -> aligned_t {
   std::cout << "Hello from qthread task!" << std::endl;
   return 42;
 }
+
 /*
 static auto task_inline(aligned_t *) -> aligned_t {
   std::cout << "Hello from task inline to caller!" << std::endl;
@@ -95,28 +96,28 @@ struct sender_forkjoin {
 auto main() -> int {
   stdexx::init();
 
-  //Example 1
+  // Example 1
   stdexec::sender auto my_qthreads_sender = sender{task, 0};
   stdexec::receiver auto my_qthreads_sender_receiver = receiver{};
   auto op1 = stdexec::connect(my_qthreads_sender, my_qthreads_sender_receiver);
   stdexec::start(op1);
 
-  //Example 2
+  // Example 2
   auto sender_fj = sender_forkjoin{task};
-  auto op = stdexec::connect(sender_fj, empty_recv::expect_value_receiver{(aligned_t)42});
+  auto op = stdexec::connect(sender_fj,
+                             empty_recv::expect_value_receiver{(aligned_t)42});
   stdexec::start(op);
 
-  //Example 3
-  //Custom then to implement sync
-  stdexec::sender auto s1 =
-    stdexx::then(stdexec::just(42), sender{task, 0});
-  stdexec::sender auto s2 =
-    stdexx::then(stdexec::just(42), sender{task, 0});
-  auto [v1,v2] = stdexec::sync_wait(stdexec::when_all(s1, s2)).value();
+  // Example 3
+  // Custom then to implement sync
+  stdexec::sender auto s1 = stdexx::then(stdexec::just(42), sender{task, 0});
+  stdexec::sender auto s2 = stdexx::then(stdexec::just(42), sender{task, 0});
+  auto [v1, v2] = stdexec::sync_wait(stdexec::when_all(s1, s2)).value();
   std::cout << *v1 + *v2 << std::endl;
 
-  //Example 4 //Should this work?
-  //Using custom sender and receiver to fork-off work and joining threads via my_qthreads_sender_receiver 
+  // Example 4 //Should this work?
+  // Using custom sender and receiver to fork-off work and joining threads via
+  // my_qthreads_sender_receiver
   /*stdexec::sender auto work = stdexec::then(my_qthreads_sender, task_inline);
   auto op2 = stdexec::connect(work, my_qthreads_sender_receiver);
   stdexec::start(op2);

@@ -71,7 +71,9 @@ struct on_qthreads_sender {
   stdexec::env<> get_env() const noexcept { return {}; }
 
   template <stdexec::receiver Receiver>
-  auto connect(Receiver receiver) && -> stdexec::connect_result_t<Previous, on_qthreads_receiver<Receiver, Work>> {
+  auto connect(Receiver receiver)
+    && -> stdexec::connect_result_t<Previous,
+                                    on_qthreads_receiver<Receiver, Work>> {
     return stdexec::connect(previous_, on_qthreads_receiver{receiver, work_});
   }
 };

@@ -1,6 +1,6 @@
 #pragma once
 
-//Stand-alone version, not requiring Catch2
+// Stand-alone version, not requiring Catch2
 
 #include <assert.h>
 
@@ -8,7 +8,7 @@ namespace empty_recv {
 namespace ex = stdexec;
 
 #define CHECK(cond) assert(cond)
-#define PRINT(err) std::cerr<<std::string(err) << std::endl;
+#define PRINT(err) std::cerr << std::string(err) << std::endl;
 
 struct recv0 {
   using receiver_concept = stdexec::receiver_t;
@@ -88,7 +88,7 @@ struct expect_void_receiver : base_expect_receiver<_Env> {
 
   template <class... Ts>
   void set_value(Ts...) noexcept {
-   PRINT("set_value called on expect_void_receiver with some non-void value");
+    PRINT("set_value called on expect_void_receiver with some non-void value");
   }
 
   void set_stopped() noexcept {

@@ -104,11 +104,14 @@ auto main(int argc, char *argv[]) -> int {
 //*********************
 //*********************
 
-#include <thread>
 #include <future>
+#include <thread>
 
-void fib(unsigned int n, std::promise<int> && p) {
-  if (n < 2) { p.set_value(n); return; }
+void fib(unsigned int n, std::promise<int> &&p) {
+  if (n < 2) {
+    p.set_value(n);
+    return;
+  }
 
   std::promise<int> p1;
   std::promise<int> p2;
@@ -116,9 +119,9 @@ void fib(unsigned int n, std::promise<int> && p) {
   auto ret2 = p2.get_future();
   unsigned int n1 = n - 1, n2 = n - 2;
 
-  std::thread t1 (fib, n1, std::move(p1));
+  std::thread t1(fib, n1, std::move(p1));
   t1.join();
-  std::thread t2 (fib, n2, std::move(p2));
+  std::thread t2(fib, n2, std::move(p2));
   t2.join();
 
   p.set_value(ret1.get() + ret2.get());
@@ -133,7 +136,7 @@ auto main(int argc, char *argv[]) -> int {
   auto const start{steady_clock::now()};
   std::promise<int> p;
   auto f = p.get_future();
-  std::thread thr (fib,depth,std::move(p));
+  std::thread thr(fib, depth, std::move(p));
   thr.join();
   unsigned int r = f.get();
   auto const end{steady_clock::now()};
@@ -143,7 +146,8 @@ auto main(int argc, char *argv[]) -> int {
     std::cout << "Failed." << std::endl;
     exit(1);
   }
-  std::cout << "stdthread" << "," << depth << "," << t.count() << "," << 1 << std::endl;
+  std::cout << "stdthread" << "," << depth << "," << t.count() << "," << 1
+            << std::endl;
 }
 
 #elif (QTHREADS)
@@ -214,7 +218,8 @@ auto main(int argc, char *argv[]) -> int {
 
   auto const start{steady_clock::now()};
   auto [r] = stdexec::sync_wait(stdexx::qthreads_just_sender(depth) |
-    stdexec::then(&fib)).value();
+                                stdexec::then(&fib))
+               .value();
   auto const end{steady_clock::now()};
   std::chrono::duration<double> const t{end - start};
   if (r != validation[depth]) {
@@ -235,33 +240,36 @@ auto main(int argc, char *argv[]) -> int {
 #define USE_SCHED_ON_EACH_LEVEL
 
 #include "exec/static_thread_pool.hpp"
-constexpr int THREADS=1;
+constexpr int THREADS = 1;
 
 #if !defined(USE_CTX_ON_EACH_LEVEL)
 
 unsigned int fib_per_thread(size_t n) {
   if (n < threshold) return fib_serial(n);
   if (n < 2uz) return n;
-  stdexec::sender auto s1 = stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread);
-  stdexec::sender auto s2 = stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread);
+  stdexec::sender auto s1 =
+    stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread);
+  stdexec::sender auto s2 =
+    stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread);
   auto [r1, r2] =
     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
   return r1 + r2;
 }
 
-  static exec::static_thread_pool ctx{THREADS};
- unsigned int fib(size_t n) {
+static exec::static_thread_pool ctx{THREADS};
+
+unsigned int fib(size_t n) {
   if (n < threshold) return fib_serial(n);
-    stdexec::scheduler auto sched = ctx.get_scheduler();
-    // Note: using start_on recursively results in a deadlock
-    stdexec::sender auto s1 =
-    stdexec::starts_on(sched, stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread));
-    stdexec::sender auto s2 =
-    stdexec::starts_on(sched, stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread));
-   auto [r1, r2] =
-     stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
-   return r1 + r2;
- }
+  stdexec::scheduler auto sched = ctx.get_scheduler();
+  // Note: using start_on recursively results in a deadlock
+  stdexec::sender auto s1 = stdexec::starts_on(
+    sched, stdexec::just(n - 1uz) | stdexec::then(&fib_per_thread));
+  stdexec::sender auto s2 = stdexec::starts_on(
+    sched, stdexec::just(n - 2uz) | stdexec::then(&fib_per_thread));
+  auto [r1, r2] =
+    stdexec::sync_wait(stdexec::when_all(std::move(s1), std::move(s2))).value();
+  return r1 + r2;
+}
 #else
 // **** using static_thread_pool on each nesting level *****
 unsigned int fib(size_t n) {
@@ -273,10 +281,8 @@ unsigned int fib(size_t n) {
   sender auto s2 = starts_on(sched, just(n - 2uz) | then(fib));
   /*auto [r1, r2] =
     sync_wait(when_all(std::move(s1), std::move(s2))).value();*/
-    auto [r1] =
-    sync_wait(when_all(std::move(s1))).value();
-    auto [r2] =
-    sync_wait(when_all(std::move(s2))).value();
+  auto [r1] = sync_wait(when_all(std::move(s1))).value();
+  auto [r2] = sync_wait(when_all(std::move(s2))).value();
   return r1 + r2;
 }
 #endif
@@ -285,12 +291,12 @@ auto main(int argc, char *argv[]) -> int {
   using namespace stdexec;
 
   auto const start{steady_clock::now()};
-  #if !defined(USE_SCHED_ON_EACH_LEVEL)
+#if !defined(USE_SCHED_ON_EACH_LEVEL)
   auto algorithm = stdexec::just(depth) | stdexec::then(fib));
-    auto [r] = sync_wait(algorithm).value();
-  #else
-    std::size_t r = fib(depth);
-  #endif
+  auto [r] = sync_wait(algorithm).value();
+#else
+  std::size_t r = fib(depth);
+#endif
   auto const end{steady_clock::now()};
 
   std::chrono::duration<double> const t{end - start};
@@ -329,8 +335,8 @@ auto main(int argc, char *argv[]) -> int {
 
   // timing this
   auto const start{steady_clock::now()};
-  #pragma omp parallel shared(r)
-  #pragma omp single
+#pragma omp parallel shared(r)
+#pragma omp single
   r = fib(depth);
   auto const end{steady_clock::now()};
 

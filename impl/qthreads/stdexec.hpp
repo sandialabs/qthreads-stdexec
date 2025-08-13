@@ -13,7 +13,7 @@
 
 #include "common.hpp"
 
-//#define SEQUENTIAL_WRAPPER_BACKEND
+// #define SEQUENTIAL_WRAPPER_BACKEND
 
 namespace stdexx {
 

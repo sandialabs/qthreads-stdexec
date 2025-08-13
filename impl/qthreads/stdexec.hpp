@@ -151,6 +151,8 @@ static constexpr bool has_outer_qthread<qthreads_then_receiver<R, F>> =
 // additional init/deinit they may need.
 template <typename Derived_Op_State, typename Receiver>
 struct qt_os_base : immovable {
+  // TODO: don't bother storing the feb when re-using the waiting
+  // thread to perform the work.
   aligned_t feb;
   Receiver receiver;
 
@@ -168,17 +170,18 @@ struct qt_os_base : immovable {
 #ifdef SEQUENTIAL_WRAPPER_BACKEND
     Derived_Op_State::task(this);
 #else
-    int r = qthread_fork(&Derived_Op_State::task, this, &feb);
-
-    if (r != QTHREAD_SUCCESS) {
-      stdexec::set_error(std::move(this->receiver), r);
+    if constexpr (uses_outer_qthread) {
+      Derived_Op_State::task(this);
+    } else {
+      int r = qthread_fork(&Derived_Op_State::task, this, &feb);
+      assert(!r);
     }
 #endif
   }
 
   inline void wait() noexcept {
 #ifndef SEQUENTIAL_WRAPPER_BACKEND
-    qthread_readFF(NULL, &feb);
+    if constexpr (!uses_outer_qthread) qthread_readFF(NULL, &feb);
 #endif
   }
 };
@@ -347,8 +350,19 @@ template <bool needs_continuation, typename Receiver, typename... Senders>
 struct when_all_op_state : immovable {
   // just a shorthand for referring to this type.
   using os_t = when_all_op_state<needs_continuation, Receiver, Senders...>;
+
+  static constexpr bool uses_outer_qthread = has_outer_qthread<Receiver>;
+
+  // If there's an outer qthread available to delegate
+  // for running one of the when_all entries, it should be used for the last
+  // one. This ensures that all the others get launched before it runs.
   template <std::size_t I>
-  using item_receiver = when_all_item_receiver<os_t, I>;
+  static constexpr bool delegated_outer_thread =
+    uses_outer_qthread && I == (sizeof...(Senders) - 1uz);
+
+  template <std::size_t I>
+  using item_receiver =
+    when_all_item_receiver<os_t, I, delegated_outer_thread<I>>;
   template <typename T>
     requires is_index_sequence<T>
   struct infer_tuple_types;
@@ -405,7 +419,7 @@ struct when_all_op_state : immovable {
 
     op_states_t(os_t *os, Senders &&...senders) noexcept:
       tup(op_state_converter{std::move(senders...[Ix]),
-                             when_all_item_receiver<os_t, Ix>{os}}...) {}
+                             item_receiver<Ix>{os}}...) {}
 
     template <std::size_t I>
     decltype(auto) get() noexcept {

@@ -122,9 +122,21 @@ struct qthreads_scheduler {
 struct qthreads_env {
   qthreads_scheduler get_completion_scheduler() const noexcept { return {}; }
 
+  template <typename completion_tag>
+  friend qthreads_scheduler
+  tag_invoke(stdexec::get_completion_scheduler_t<completion_tag> const,
+             qthreads_env const &) noexcept;
+
   friend qthreads_domain tag_invoke(stdexec::get_domain_t const,
                                     qthreads_env const &) noexcept;
 };
+
+template <typename completion_tag>
+qthreads_scheduler
+tag_invoke(stdexec::get_completion_scheduler_t<completion_tag> const,
+           qthreads_env const &) noexcept {
+  return {};
+}
 
 // Have to jump through some extra hoops to check whether a receiver type
 // is the one internal to sync_wait.
@@ -927,6 +939,85 @@ struct transform_sender_for<stdexec::when_all_t> {
     return qthreads_when_all_sender(std::move(sndrs)...);
   }
 };
+
+template <>
+struct transform_sender_for<stdexec::schedule_from_t> {
+  template <typename Sched, typename Sender>
+  auto operator()(stdexec::__ignore, Sched sched, Sender &&sndr) const {
+    // It would be helpful to know WHERE the second thing is coming from so we
+    // can know whether to just connect to it or do something else.
+    // sched is just a qthreads scheduler and sndr is a
+    // stdexec::(anonymous namespace)::__sexpr<stdexec::(lambda){}>>.
+    // The second thing is, presumably just the output from then?
+    //
+    // From the spec, this "schedule_from" operation is supposed to:
+    // schedule work dependent on the completion of a sender onto a scheduler's
+    // execution resource.
+    // Presumably that involves:
+    // - creating a new equivalent of a qthreads_just_sender that sends
+    //   the values (on the qthread) received from work on some other domain
+    //   or forwards errors/cancellation/whatever.
+    // This means the sender will hold a reference to the sender it's forwarding
+    // from. At connect time it will create a receiver that launches a new
+    // qthread and sends the forwarded values/behavior/whatever on the created
+    // qthread. There's some business in the nvexec example about keeping a
+    // reference to an operation state around. Presumably this is like we had to
+    // do with when_all, (and will require similar trickery for in-place
+    // initiaization). Here's a theory as to why it needs the reference to the
+    // operation state: To launch work on a new scheduler asynchronously, the
+    // output values being forwarded HAVE TO BE STORED SOMEWHERE. This means
+    // that in order to call set_value on whatever the outer receiver is, the
+    // values have to be fetched *from* somewhere. That's why the receiver has
+    // to hold a reference to the outer operation state. Even if we resorted to
+    // manually creating the qthread to call set_value, we'd need to store the
+    // values being forwarded somewhere. All of this means that the input sender
+    // here, in spite of being an sexpr of some kind, is actually supposed to be
+    // the sender sending values that we're supposed to forward. All we really
+    // need to do is connect to it though, (and interact with its operation
+    // state) so, maybe that's fine?
+    static_assert(false);
+    // using __sender_t = stdexec::__t<schedule_from_sender_t<Sched,
+    // __id<__decay_t<Sender>>>>; return __sender_t{sched,
+    // static_cast<Sender&&>(sndr)};
+  }
+};
+
+template <>
+struct transform_sender_for<stdexec::continues_on_t> {
+  template <class Sender>
+  using _current_scheduler_t = stdexec::__result_of<
+    stdexec::get_completion_scheduler<stdexec::set_value_t>,
+    stdexec::env_of_t<Sender>>;
+
+  template <class Sched, class Sender>
+  auto operator()(stdexec::__ignore, Sched sched, Sender &&sndr) const {
+    // Alright, so what this one should do is (roughly) the same idiom as our
+    // sync_wait: override then forward everything into a schedule_from call
+    // where the receiving domain's schedule_from call will take care of the
+    // rest.
+    static_assert(false);
+    // using _sender_t = __t<continues_on_sender_t<Sched,
+    // __id<__decay_t<Sender>>>>; auto stream_sched =
+    // get_completion_scheduler<set_value_t>(get_env(sndr)); return
+    // schedule_from(
+    //   static_cast<Sched&&>(sched),
+    //   _sender_t{sched, stream_sched.context_state_,
+    //   static_cast<Sender&&>(sndr)});
+  }
+};
+
+/*template <>
+struct transform_sender_for<stdexec::__schfr::schedule_from_t> {
+  //template <typename... T>
+  //auto operator()(T&&... t) const {
+  //  static_assert(false);
+  //}
+  template <class Fn>
+  auto operator()(stdexec::__ignore, qthreads_scheduler const &s, Fn &&f) const
+{ f.nothere(); return stdexec::schedule(s) | stdexec::then(std::move(f));
+    //return qthreads_basic_func_sender(std::move(f));
+  }
+};*/
 
 // TODO: the local_state and result receiver include some useless
 // details left over from the default sync_wait. We should remove them.

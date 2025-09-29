@@ -975,6 +975,9 @@ struct transform_sender_for<stdexec::schedule_from_t> {
     // the sender sending values that we're supposed to forward. All we really
     // need to do is connect to it though, (and interact with its operation
     // state) so, maybe that's fine?
+    // Note: if the sender we're waiting on is from the default domain,
+    // are we supposed to make a run_loop to run it or does the
+    // default domain do that somewhere else? It doesn't appear to.
     static_assert(false);
     // using __sender_t = stdexec::__t<schedule_from_sender_t<Sched,
     // __id<__decay_t<Sender>>>>; return __sender_t{sched,

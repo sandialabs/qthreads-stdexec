@@ -794,6 +794,171 @@ struct qthreads_then_sender : qthreads_base_sender<qthreads_then_sender<S, F>> {
   }
 };
 
+template <typename Receiver, typename Sender>
+struct schedule_from_op_state;
+
+template <typename outer_op_state_t>
+struct schedule_from_receiver {
+  using receiver_concept = stdexec::receiver_t;
+
+  outer_op_state_t *op;
+
+  // TODO: is this actually the right env to return here?
+  // Should it get the env from the sender it's connecting to instead?
+  // qthreads_env get_env() const noexcept { return {}; }
+
+  template <typename... V>
+  __attribute__((always_inline)) void set_value(V... vals) && noexcept {
+    op->_set_value(vals...);
+  }
+
+  template <typename E>
+  __attribute__((always_inline)) void set_error(E &&e) && noexcept {
+    op->_set_error(static_cast<E &&>(e));
+  }
+
+  // Currently just disable set_stopped.
+  //__attribute__((always_inline)) void set_stopped() && noexcept {
+  //  op->set_stopped();
+  //}
+};
+
+template <std::size_t... Ix, typename... Ts, typename... A>
+void fill_tuple_impl(std::index_sequence<Ix...>,
+                     std::tuple<Ts...> &t,
+                     A &&...a) noexcept {
+  ((std::get<Ix>(t) = static_cast<A...[Ix] &&>(a...[Ix])), ...);
+}
+
+// fill an existing tuple rather than making it on the fly using make_tuple.
+template <typename... Ts, typename... As>
+void fill_tuple(std::tuple<Ts...> &t, As &&...as) noexcept {
+  fill_tuple_impl(
+    std::make_index_sequence<sizeof...(Ts)>(), t, static_cast<As &&>(as)...);
+}
+
+// similar to when_all_op_state
+template <typename OuterReceiver, typename InnerSender>
+struct schedule_from_op_state : immovable {
+  // shorter alias for referring to this type.
+  using os_t = schedule_from_op_state<OuterReceiver, InnerSender>;
+
+  using ret_tuple_t = ret_tuple_of_qthreads_sender<InnerSender>;
+  using inner_op_state_t = decltype(stdexec::connect(
+    std::declval<InnerSender>(), std::declval<schedule_from_receiver<os_t>>()));
+
+  // Initialization trick similar to when_all_op_state.
+  // Trick to initialize immovable operation states in-place inside
+  // our tuple of inner operation states.
+  // Relies on C++17 guaranteed copy elision.
+  // See https://stackoverflow.com/a/75594252
+  template <typename S, typename R>
+  struct op_state_converter {
+    std::tuple<S, R> args;
+
+    op_state_converter(S &&s, R &&r) noexcept:
+      args{static_cast<S &&>(s), static_cast<R &&>(r)} {}
+
+    using op_state =
+      decltype(stdexec::connect(std::declval<S &&>(), std::declval<R &&>()));
+
+    // Guaranteed copy elision here allows constructing
+    // the operation state in-place when initializing a tuple
+    // of operation states.
+    operator op_state() && noexcept {
+      return stdexec::connect(std::move(std::get<0>(args)),
+                              std::move(std::get<1>(args)));
+    }
+  };
+
+  OuterReceiver receiver;
+  size_t feb;
+  ret_tuple_t retvals;
+  std::exception_ptr exc = nullptr;
+  inner_op_state_t inner_op_state;
+
+  schedule_from_op_state(OuterReceiver &&r, InnerSender &&s) noexcept:
+    receiver{std::move(r)},
+    inner_op_state{op_state_converter{static_cast<InnerSender &&>(s),
+                                      schedule_from_receiver{this}}} {}
+
+  // The function run on a new qthread for the set_value case.
+  static std::size_t set_value_impl(void *os_v) noexcept {
+    os_t *os = reinterpret_cast<os_t *>(os_v);
+    consuming_apply(
+      [os](auto... args) {
+        stdexec::set_value(std::move(os->receiver), args...);
+      },
+      os->retvals);
+    return 0uz;
+  }
+
+  // TODO: this needs to launch a qthread here instead.
+  // What does this mean in practice?
+  // The inner operation state represents the chain of operations
+  // that has led to the transition between compute resources
+  // whereas the outer receiver is what expects to be continuing
+  // on the new scheduler.
+  // This means:
+  // - connect on this operation should include calling the corresponding
+  // connect operation to build the wrapped operation state.
+  // - Start on this operation state should also
+  //   start the internal operation state.
+  // - The actual work of starting up a compute resource to run the
+  //   set_value routine of the outer receiver should be deferred
+  //   until this call happens.
+  //   - This could probably be done via some trickery with having the
+  //     starting an operation on the scheduler object that will forward
+  //     whatever is stored in this operation_state, but we can just
+  //     start the new qthread here for simplicity.
+  template <typename... V>
+  void _set_value(V... val) noexcept {
+    fill_tuple(retvals, static_cast<V &&>(val)...);
+    qthread_fork(&set_value_impl, reinterpret_cast<void *>(this), &feb);
+  }
+
+  static std::size_t set_error_impl(void *os_v) noexcept {
+    os_t *os = reinterpret_cast<os_t *>(os_v);
+    stdexec::set_error(std::move(os->receiver), std::move(os->exc));
+    return 0uz;
+  }
+
+  // It appears the common convention is to just pass around
+  // exceptions as std::exception_ptr objects, so we assume
+  // that here too.
+  template <std::size_t Index, typename E>
+  void _set_error(E &&e) noexcept {
+    this->exc = std::move(e);
+    qthread_fork(set_error_impl, reinterpret_cast<void *>(this), &feb);
+  }
+
+  void wait() noexcept { qthread_readFF(nullptr, &feb); }
+
+  void start() noexcept { stdexec::start(inner_op_state); }
+};
+
+template <typename InnerSender>
+struct schedule_from_sender :
+  qthreads_base_sender<schedule_from_sender<InnerSender>> {
+  InnerSender input_sender;
+
+  schedule_from_sender(InnerSender &&s) noexcept: input_sender{std::move(s)} {}
+
+  // This should pull its completion signatures directly from the wrapped
+  // sender. The connect operation should just build a schedule_from_op_state.
+  // The qthreads env should be correct for this.
+  template <typename Env>
+  auto get_completion_signatures(Env &&e) noexcept {
+    return stdexec::get_completion_signatures(input_sender,
+                                              static_cast<Env &&>(e));
+  }
+
+  template <stdexec::receiver R>
+  auto connect(R &&r) && noexcept {
+    return schedule_from_op_state{std::move(r), std::move(input_sender)};
+  }
+};
+
 // Roughly adapted from the nvexec when_all customization.
 // This does a bunch of work to derive the completion signatures for
 // when_all based on the completion signatures of the various
@@ -944,6 +1109,10 @@ template <>
 struct transform_sender_for<stdexec::schedule_from_t> {
   template <typename Sched, typename Sender>
   auto operator()(stdexec::__ignore, Sched sched, Sender &&sndr) const {
+    return qthreads_just_sender(10uz);
+    // static_assert(std::is_same_v<Sched, qthreads_scheduler>);
+    // return schedule_from_sender{std::move(sndr)};
+
     // It would be helpful to know WHERE the second thing is coming from so we
     // can know whether to just connect to it or do something else.
     // sched is just a qthreads scheduler and sndr is a
@@ -957,31 +1126,27 @@ struct transform_sender_for<stdexec::schedule_from_t> {
     // - creating a new equivalent of a qthreads_just_sender that sends
     //   the values (on the qthread) received from work on some other domain
     //   or forwards errors/cancellation/whatever.
-    // This means the sender will hold a reference to the sender it's forwarding
-    // from. At connect time it will create a receiver that launches a new
-    // qthread and sends the forwarded values/behavior/whatever on the created
-    // qthread. There's some business in the nvexec example about keeping a
-    // reference to an operation state around. Presumably this is like we had to
-    // do with when_all, (and will require similar trickery for in-place
-    // initiaization). Here's a theory as to why it needs the reference to the
-    // operation state: To launch work on a new scheduler asynchronously, the
-    // output values being forwarded HAVE TO BE STORED SOMEWHERE. This means
-    // that in order to call set_value on whatever the outer receiver is, the
-    // values have to be fetched *from* somewhere. That's why the receiver has
-    // to hold a reference to the outer operation state. Even if we resorted to
-    // manually creating the qthread to call set_value, we'd need to store the
-    // values being forwarded somewhere. All of this means that the input sender
-    // here, in spite of being an sexpr of some kind, is actually supposed to be
-    // the sender sending values that we're supposed to forward. All we really
-    // need to do is connect to it though, (and interact with its operation
-    // state) so, maybe that's fine?
+    // This means the sender will hold a reference to the sender it's
+    // forwarding from. At connect time it will create a receiver that launches
+    // a new qthread and sends the forwarded values/behavior/whatever on the
+    // created qthread. There's some business in the nvexec example about
+    // keeping a reference to an operation state around. Presumably this is
+    // like we had to do with when_all, (and will require similar trickery for
+    // in-place initiaization). Here's a theory as to why it needs the
+    // reference to the operation state: To launch work on a new scheduler
+    // asynchronously, the output values being forwarded HAVE TO BE STORED
+    // SOMEWHERE. This means that in order to call set_value on whatever the
+    // outer receiver is, the values have to be fetched *from* somewhere.
+    // That's why the receiver has to hold a reference to the outer operation
+    // state. Even if we resorted to manually creating the qthread to call
+    // set_value, we'd need to store the values being forwarded somewhere. All
+    // of this means that the input sender here, in spite of being an sexpr of
+    // some kind, is actually supposed to be the sender sending values that
+    // we're supposed to forward. All we really need to do is connect to it
+    // though, (and interact with its operation state) so, maybe that's fine?
     // Note: if the sender we're waiting on is from the default domain,
     // are we supposed to make a run_loop to run it or does the
     // default domain do that somewhere else? It doesn't appear to.
-    static_assert(false);
-    // using __sender_t = stdexec::__t<schedule_from_sender_t<Sched,
-    // __id<__decay_t<Sender>>>>; return __sender_t{sched,
-    // static_cast<Sender&&>(sndr)};
   }
 };
 

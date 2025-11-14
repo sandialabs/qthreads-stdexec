@@ -1,3 +1,5 @@
+# Copyright 2025 Sandia National Laboratories
+
 # if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 #   # using Clang
 # elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

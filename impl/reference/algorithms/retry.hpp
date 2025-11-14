@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #pragma once
 
 // Pull in the reference implementation of P2300:

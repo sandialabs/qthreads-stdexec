@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #pragma once
 
 #include <reference/algorithms/retry.hpp>

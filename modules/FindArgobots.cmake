@@ -1,3 +1,5 @@
+# Copyright 2025 Sandia National Laboratories
+
 find_library(argobots_lib_found libabt PATHS ${ARGOBOTS_ROOT} SUFFIXES lib lib64 NO_DEFAULT_PATHS)
 find_path(argobots_headers_found abt.h PATHS ${ARGOBOTS_ROOT}/include NO_DEFAULT_PATHS)
 

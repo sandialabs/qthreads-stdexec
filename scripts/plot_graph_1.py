@@ -1,3 +1,5 @@
+# Copyright 2025 Sandia National Laboratories
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt

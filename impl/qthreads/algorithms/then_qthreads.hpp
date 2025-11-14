@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #define once
 
 #include <iostream>

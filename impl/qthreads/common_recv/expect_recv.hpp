@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #pragma once
 
 // Stand-alone version, not requiring Catch2

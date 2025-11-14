@@ -1,3 +1,5 @@
+# Copyright 2025 Sandia National Laboratories
+
 foreach(DIR ${CMAKE_CURRENT_SOURCE_DIR})
   file(GLOB _HEADERS ${DIR}/*.hpp)
   file(GLOB _SOURCES ${DIR}/*.cpp)

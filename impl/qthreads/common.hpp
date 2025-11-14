@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #ifndef QTHREADS_STDEXEC_COMMON_HPP
 #define QTHREADS_STDEXEC_COMMON_HPP
 

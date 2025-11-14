@@ -1,3 +1,5 @@
+# Copyright 2025 Sandia National Laboratories
+
 #std::execution with ULT backend (X)
 
 cmake_minimum_required(VERSION 3.25)

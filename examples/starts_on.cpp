@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #include <exec/static_thread_pool.hpp>
 #include <stdexx.hpp>
 

@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #include <assert.h>
 #include <chrono>
 #include <cstdlib>

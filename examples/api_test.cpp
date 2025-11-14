@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #include <cstdlib>
 #include <iostream>
 #include <stdexx.hpp>

@@ -1,3 +1,5 @@
+// Copyright 2025 Sandia National Laboratories
+
 #pragma once
 
 #include <qthreads/algorithms/then_qthreads.hpp>

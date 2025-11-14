@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2025 Sandia National Laboratories
+
 binary=$1
 
 if [ x"$binary" = x ]; then
